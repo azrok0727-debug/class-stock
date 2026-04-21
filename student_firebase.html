@@ -65,9 +65,9 @@ body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif
 .section-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;margin-top:20px;}
 
 /* ── 차트 모달 (모바일) ── */
-.chart-modal{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column;overflow:hidden;}
+.chart-modal{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;overflow:hidden;}
 .chart-modal-header{padding:14px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.chart-modal-back{background:none;border:none;color:var(--blue);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;padding:0;margin-bottom:10px;display:block;}
+.chart-modal-back{background:none;border:none;color:var(--blue);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;padding:10px 0;margin-bottom:6px;display:block;min-height:44px;}
 .chart-modal-name{font-size:18px;font-weight:700;}
 .chart-modal-price{font-size:28px;font-weight:700;margin:2px 0;}
 .chart-modal-change{font-size:14px;}
@@ -173,7 +173,7 @@ canvas.chart-canvas{display:block;width:100%;}
 .asset-row:last-child{border-bottom:none;font-weight:700;font-size:16px;color:var(--blue);}
 .asset-label{color:var(--text2);}
 .holding-stock-item{background:var(--bg3);border-radius:var(--radius);padding:8px 10px;margin-top:8px;font-size:12px;}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:var(--radius);font-size:13px;font-weight:700;z-index:200;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:var(--radius);font-size:13px;font-weight:700;z-index:600;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;}
 .toast.success{background:var(--green);color:#0d1117;}
 .toast.error{background:var(--red);color:white;}
@@ -701,7 +701,7 @@ function renderChartPanel(ticker) {
   `;
 }
 
-function setChartPeriod(p, ticker, mode) {
+window.setChartPeriod = function setChartPeriod(p, ticker, mode) {
   chartPeriod = p;
   if (mode === 'pc') {
     // re-render chart panel only
@@ -777,8 +777,9 @@ function closeChartModal() {
   document.getElementById('chart-modal-root')?.remove();
   chartModalTicker = null;
 }
+window.closeChartModal    = closeChartModal;
 
-function setMobileTradeType(type, ticker) {
+window.setMobileTradeType = function setMobileTradeType(type, ticker) {
   activeTradeType = type;
   const panel = document.getElementById('modal-chart-panel');
   if (panel) panel.innerHTML = renderChartModalInner(ticker);
@@ -815,13 +816,13 @@ function renderTradePanelContent(ticker) {
   `;
 }
 
-function updateModalTradeTotal(ticker) {
+window.updateModalTradeTotal = function updateModalTradeTotal(ticker) {
   const qty = parseInt(document.getElementById('modal-trade-qty')?.value) || 0;
   const el  = document.getElementById('modal-trade-total');
   if (el) el.textContent = fmtF(qty * (fbState.prices?.[ticker] ?? 0)) + '점';
 }
 
-function setModalMaxQty(ticker) {
+window.setModalMaxQty = function setModalMaxQty(ticker) {
   const stu   = fbState.students[currentUser];
   const price = fbState.prices?.[ticker] ?? 1;
   const avail = getAvailShares(ticker);
@@ -832,7 +833,7 @@ function setModalMaxQty(ticker) {
   if (el) { el.value = max; updateModalTradeTotal(ticker); }
 }
 
-async function executeModalTrade(ticker) {
+window.executeModalTrade = async function executeModalTrade(ticker) {
   if (!fbState.marketOpen) return showToast('폐장 중에는 거래할 수 없습니다', 'error');
   const qty   = parseInt(document.getElementById('modal-trade-qty')?.value) || 0;
   if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
@@ -915,6 +916,8 @@ function updateNoticeBar() {
 function renderNewsSidePanel() {
   const panel = document.getElementById('news-side-panel');
   if (!panel) return;
+  // 모바일에서는 뉴스 사이드 패널 사용 안 함
+  if (window.innerWidth < 900) { panel.innerHTML = ''; return; }
   const newsObj = fbState?.news || {};
   const news = typeof newsObj === 'object' && !Array.isArray(newsObj)
     ? Object.values(newsObj).filter(Boolean) : [];
@@ -1228,7 +1231,7 @@ function renderPortfolio() {
         <div class="holding-card">
           <div class="holding-header">
             <div>
-              <div class="holding-ticker" style="color:${s.color}">${s.ticker}</div>
+              <div class="holding-ticker" style="color:${s.color}">${s.name}</div>
               <div class="holding-qty">${s.name} · ${qty}주 보유</div>
             </div>
             <div style="text-align:right">
