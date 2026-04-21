@@ -197,6 +197,7 @@ function subscribeState() {
       if (!fbState.students[m].holdings) fbState.students[m].holdings = {};
     }));
     updateMarketCtrl();
+    autoUpdateGroupScores(); // 모둠 총점 자동 반영
     if (isAdmin) {
       // 공지/뉴스 탭에서 입력 중이면 자동 재렌더 건너뜀
       const skipRender = (activeTab === 'notice' || activeTab === 'news') &&
@@ -327,7 +328,7 @@ function renderDashboard() {
               <td style="font-weight:700">${fmtF(pr)}</td>
               <td class="${up?'up':dn?'down':''}">${up?'▲':dn?'▼':'—'}${Math.abs(p).toFixed(2)}%</td>
               <td>${held} / ${sup}</td>
-              <td>${fmt(fbState.groups?.[g.id]?.totalScore ?? 1000)}</td>
+              <td style="color:var(--blue);font-weight:600">${fmt(fbState.groups?.[g.id]?.totalScore ?? 1000)}</td>
               <td><span style="font-size:11px;color:var(--blue);cursor:pointer;">📈 보기</span></td>
             </tr>`;
           }).join('')}
@@ -389,28 +390,58 @@ function renderStudents() {
 }
 
 // ── 모둠 점수 ────────────────────────────────────────────
+
+// ── 모둠 총점 자동 계산 ──────────────────────────────────
+let lastScoreUpdate = 0;
+async function autoUpdateGroupScores() {
+  // 너무 자주 업데이트 방지 (최소 5초 간격)
+  const now = Date.now();
+  if (now - lastScoreUpdate < 5000) return;
+  lastScoreUpdate = now;
+
+  const updates = {};
+  let changed = false;
+
+  GROUPS.forEach(g => {
+    // 해당 모둠 학생들의 총 자산 합산
+    const groupTotal = g.members.reduce((sum, name) => {
+      return sum + calcTotal(name);
+    }, 0);
+    const newScore = Math.round(groupTotal);
+    const oldScore = fbState.groups?.[g.id]?.totalScore ?? 1000;
+
+    if (Math.abs(newScore - oldScore) >= 1) {
+      updates[`state/groups/${g.id}/totalScore`] = newScore;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    await update(ref(db), updates);
+  }
+}
+
 function renderGroups() {
   return `
-    <div class="info-box">💡 모둠 총점을 수정하면 주가 기준가에 반영됩니다. 점수 변화는 10초마다 주가에 자연스럽게 반영됩니다.</div>
+    <div class="info-box">✅ 모둠 총점은 <strong>해당 모둠 학생들의 총 자산 합산</strong>으로 자동 계산됩니다. 5초마다 자동 반영되며, 주가 기준가에 실시간으로 영향을 줍니다.</div>
     <div class="card">
-      <h2>🏢 모둠 총점 관리</h2>
+      <h2>🏢 모둠 총점 현황 <span class="section-tag">자동 계산</span></h2>
       <table class="data-table">
-        <thead><tr><th>모둠</th><th>구성원</th><th>현재 총점</th><th>주당 기준가</th><th>수정</th></tr></thead>
+        <thead><tr><th>모둠</th><th>구성원</th><th>모둠 총 자산</th><th>주당 기준가</th><th>학생별 자산</th></tr></thead>
         <tbody>
           ${GROUPS.map((g,i) => {
             const score  = fbState.groups?.[g.id]?.totalScore ?? 1000;
             const supply = fbState.shareSupply?.[`G${g.id}`] ?? 60;
+            const memberAssets = g.members.map(name => {
+              const total = calcTotal(name);
+              return `${name}: ${fmt(total)}점`;
+            }).join(' / ');
             return `<tr>
               <td style="font-weight:700;color:${GROUP_COLORS[i]}">${g.name}</td>
               <td style="font-size:12px;color:var(--text2)">${g.members.join(', ')}</td>
-              <td style="font-weight:700">${fmt(score)}</td>
-              <td>${fmtF(score/supply)}점/주</td>
-              <td>
-                <div class="inline-edit">
-                  <input class="inline-input" type="number" data-score-gid="${g.id}" value="${score}" />
-                  <button class="btn-sm blue" data-save-score="${g.id}">저장</button>
-                </div>
-              </td>
+              <td style="font-weight:700;color:var(--blue)">${fmt(score)}점</td>
+              <td style="font-weight:600">${fmtF(score/supply)}점/주</td>
+              <td style="font-size:11px;color:var(--text3)">${memberAssets}</td>
             </tr>`;
           }).join('')}
         </tbody>
