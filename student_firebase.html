@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우리반 주식시장 — 학생용</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;
+  --border:#30363d;--border2:#484f58;
+  --text:#e6edf3;--text2:#8b949e;--text3:#656d76;
+  --green:#3fb950;--green-bg:rgba(63,185,80,0.15);
+  --red:#f85149;--red-bg:rgba(248,81,73,0.15);
+  --blue:#58a6ff;--blue-bg:rgba(88,166,255,0.12);
+  --purple:#bc8cff;--purple-bg:rgba(188,140,255,0.12);
+  --radius:8px;--radius-lg:12px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+.app{max-width:760px;margin:0 auto;padding:0 16px 80px;}
+.header{padding:20px 0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.header-left h1{font-size:17px;font-weight:700;}
+.header-left p{font-size:12px;color:var(--text2);margin-top:2px;}
+.market-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
+.status-dot.open{background:var(--green);box-shadow:0 0 6px var(--green);}
+.login-screen{padding:40px 0;}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;max-width:380px;margin:0 auto;}
+.login-card h2{font-size:18px;font-weight:700;margin-bottom:8px;}
+.login-card p{font-size:13px;color:var(--text2);margin-bottom:24px;}
+.login-card select{width:100%;padding:10px 14px;font-size:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:'Noto Sans KR',sans-serif;margin-bottom:12px;outline:none;}
+.login-card select:focus{border-color:var(--blue);}
+.btn-primary{width:100%;padding:11px;font-size:14px;font-weight:700;background:var(--blue);border:none;border-radius:var(--radius);color:#0d1117;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:opacity 0.15s;}
+.btn-primary:hover{opacity:0.85;}
+.tabs{display:flex;gap:2px;padding:12px 0;overflow-x:auto;scrollbar-width:none;position:sticky;top:0;background:var(--bg);z-index:10;border-bottom:1px solid var(--border);}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{padding:7px 14px;font-size:13px;font-weight:500;border-radius:var(--radius);border:none;background:transparent;cursor:pointer;color:var(--text2);font-family:'Noto Sans KR',sans-serif;white-space:nowrap;transition:all 0.15s;}
+.tab.active{background:var(--bg3);color:var(--text);}
+.tab:hover:not(.active){color:var(--text);}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:16px;}
+.metric{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;}
+.metric-label{font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;}
+.metric-value{font-size:19px;font-weight:700;}
+.metric-value.up{color:var(--green);}
+.metric-value.down{color:var(--red);}
+.metric-value.neutral{color:var(--text);}
+.metric-value.blue{color:var(--blue);}
+.metric-sub{font-size:11px;margin-top:2px;}
+.metric-sub.up{color:var(--green);}
+.metric-sub.down{color:var(--red);}
+.section-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;margin-top:20px;}
+.section-title:first-child{margin-top:0;}
+.stock-row{display:flex;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;}
+.stock-row:hover{border-color:var(--border2);}
+.stock-row.selected{border-color:var(--blue);background:var(--blue-bg);}
+.s-info{flex:1;min-width:0;}
+.s-ticker{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;font-family:'Space Grotesk',sans-serif;}
+.s-name{font-size:11px;color:var(--text2);margin-top:2px;}
+.badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;}
+.badge-inv{background:var(--red-bg);color:var(--red);}
+.badge-lev{background:var(--purple-bg);color:var(--purple);}
+.badge-base{background:var(--green-bg);color:var(--green);}
+.s-price-col{text-align:right;margin:0 12px;}
+.s-price{font-size:14px;font-weight:700;}
+.s-change{font-size:11px;margin-top:2px;}
+.s-change.up{color:var(--green);}
+.s-change.down{color:var(--red);}
+.s-change.flat{color:var(--text3);}
+.s-vol{font-size:11px;color:var(--text3);text-align:right;min-width:36px;}
+.trade-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-top:16px;}
+.trade-panel h3{font-size:15px;font-weight:700;margin-bottom:14px;}
+.trade-tabs{display:flex;gap:6px;margin-bottom:14px;}
+.trade-tab{flex:1;padding:8px;font-size:13px;font-weight:600;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;cursor:pointer;font-family:'Noto Sans KR',sans-serif;color:var(--text2);transition:all 0.15s;}
+.trade-tab.buy.active{background:var(--green-bg);border-color:var(--green);color:var(--green);}
+.trade-tab.sell.active{background:var(--red-bg);border-color:var(--red);color:var(--red);}
+.trade-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.trade-row label{font-size:12px;color:var(--text2);width:70px;flex-shrink:0;}
+.trade-row input{flex:1;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Noto Sans KR',sans-serif;outline:none;}
+.trade-row input:focus{border-color:var(--blue);}
+.trade-summary{background:var(--bg3);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;font-size:13px;}
+.trade-summary .row{display:flex;justify-content:space-between;margin-bottom:4px;}
+.trade-summary .row:last-child{margin-bottom:0;font-weight:700;border-top:1px solid var(--border);padding-top:6px;margin-top:2px;}
+.trade-summary .row span:first-child{color:var(--text2);}
+.btn-trade{width:100%;padding:12px;font-size:14px;font-weight:700;border:none;border-radius:var(--radius);cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:opacity 0.15s;}
+.btn-trade.buy{background:var(--green);color:#0d1117;}
+.btn-trade.sell{background:var(--red);color:white;}
+.btn-trade:hover{opacity:0.85;}
+.btn-trade:disabled{opacity:0.35;cursor:not-allowed;}
+.holding-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:13px;margin-bottom:8px;}
+.holding-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.holding-ticker{font-size:14px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.holding-qty{font-size:12px;color:var(--text2);}
+.holding-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.h-stat{font-size:11px;color:var(--text3);}
+.h-stat-val{font-size:13px;font-weight:600;margin-top:2px;}
+.holding-actions{display:flex;gap:8px;margin-top:10px;}
+.btn-sm{flex:1;padding:7px;font-size:12px;font-weight:600;border-radius:var(--radius);border:1px solid;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all 0.15s;}
+.btn-sm.buy{border-color:var(--green);color:var(--green);background:transparent;}
+.btn-sm.buy:hover{background:var(--green-bg);}
+.btn-sm.sell{border-color:var(--red);color:var(--red);background:transparent;}
+.btn-sm.sell:hover{background:var(--red-bg);}
+.history-item{display:flex;align-items:center;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:5px;font-size:13px;gap:10px;}
+.hist-badge{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;flex-shrink:0;}
+.hist-badge.buy{background:var(--green-bg);color:var(--green);}
+.hist-badge.sell{background:var(--red-bg);color:var(--red);}
+.hist-main{flex:1;}
+.hist-name{font-weight:600;}
+.hist-detail{font-size:11px;color:var(--text2);margin-top:1px;}
+.hist-amount{text-align:right;flex-shrink:0;}
+.hist-total{font-weight:700;}
+.hist-total.up{color:var(--green);}
+.hist-total.down{color:var(--red);}
+.hist-date{font-size:11px;color:var(--text3);}
+.rank-item{display:flex;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;gap:12px;}
+.rank-item.me{border-color:var(--blue);background:var(--blue-bg);}
+.rank-num{font-size:16px;font-weight:700;width:28px;text-align:center;color:var(--text3);}
+.rank-num.gold{color:#ffd700;}
+.rank-num.silver{color:#c0c0c0;}
+.rank-num.bronze{color:#cd7f32;}
+.rank-info{flex:1;}
+.rank-name{font-size:14px;font-weight:600;}
+.rank-group{font-size:11px;color:var(--text2);}
+.rank-right{text-align:right;}
+.rank-total{font-size:14px;font-weight:700;}
+.rank-ret{font-size:12px;}
+.rank-ret.up{color:var(--green);}
+.rank-ret.down{color:var(--red);}
+.asset-breakdown{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;}
+.asset-breakdown h3{font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text2);}
+.asset-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;}
+.asset-row:last-child{border-bottom:none;font-weight:700;font-size:16px;color:var(--blue);}
+.asset-label{color:var(--text2);}
+.holding-stock-item{background:var(--bg3);border-radius:var(--radius);padding:8px 10px;margin-top:8px;font-size:12px;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:var(--radius);font-size:13px;font-weight:700;z-index:200;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+.toast.success{background:var(--green);color:#0d1117;}
+.toast.error{background:var(--red);color:white;}
+.toast.info{background:var(--blue);color:#0d1117;}
+.empty{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px;}
+.empty-icon{font-size:32px;margin-bottom:12px;}
+.closed-banner{background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--red);font-weight:600;text-align:center;}
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;color:var(--text2);}
+.spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.section-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;margin-top:20px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-left">
+      <h1>📊 우리반 주식시장</h1>
+      <p id="user-label">로그인 필요</p>
+    </div>
+    <div class="market-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">연결 중...</span>
+    </div>
+  </div>
+  <div id="main-content">
+    <div class="loading-screen"><div class="spinner"></div><span>Firebase 연결 중...</span></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, get, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ── Firebase 설정 ──────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyDEGBu8sFChEdtnQEEC1FFZaAIwUr9fWpc",
+  authDomain: "stock-c985f.firebaseapp.com",
+  databaseURL: "https://stock-c985f-default-rtdb.firebaseio.com",
+  projectId: "stock-c985f",
+  storageBucket: "stock-c985f.firebasestorage.app",
+  messagingSenderId: "1082843629086",
+  appId: "1:1082843629086:web:58c6b2ca396cb7842d100f"
+};
+// ────────────────────────────────────────────────────────
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ── 상수 ───────────────────────────────────────────────
+const GROUPS = [
+  { id:1, name:'1모둠', members:['김수현','주시연','신재은','이주호'] },
+  { id:2, name:'2모둠', members:['이세은','이서준','이다영','박준서'] },
+  { id:3, name:'3모둠', members:['정서윤','조혜원','임승언','김지성'] },
+  { id:4, name:'4모둠', members:['황세현','김지원','김주이','이강민'] },
+  { id:5, name:'5모둠', members:['강민채','서은수','최상윤','최효민','이윤아'] },
+  { id:6, name:'6모둠', members:['김준우','민나진','윤지환','이수빈','권용민'] },
+];
+const ALL_STUDENTS = GROUPS.flatMap(g => g.members.map(m => ({ name:m, group:g.id })));
+const GROUP_COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#ff7b72','#d2a679'];
+
+// ── 앱 상태 ────────────────────────────────────────────
+let fbState    = null;   // Firebase에서 받은 전체 state
+let currentUser = null;
+let activeTab  = 'market';
+let activeTradeType = 'buy';
+let selectedStock   = null;
+let tickTimer  = null;
+
+// ── Firebase 초기화 (없으면 기본값 생성) ────────────────
+async function ensureInitialized() {
+  const snap = await get(ref(db, 'state'));
+  if (!snap.exists()) {
+    await set(ref(db, 'state'), buildDefaultState());
+    showToast('데이터가 초기화되었습니다', 'info');
+  }
+}
+
+function buildDefaultState() {
+  const students = {};
+  GROUPS.forEach(g => {
+    const initQ = Math.floor(60 / g.members.length);
+    g.members.forEach(m => {
+      students[m] = { deposit:1000, holdings:{}, history:[], group:g.id };
+      students[m].holdings[`G${g.id}`] = initQ;
+    });
+  });
+  const groups = {};
+  GROUPS.forEach(g => { groups[g.id] = { totalScore:1000 }; });
+  const prices = {}, prevPrices = {}, shareSupply = {};
+  GROUPS.forEach(g => {
+    prices[`G${g.id}`]       = 100;
+    prices[`G${g.id}_INV`]   = 20;
+    prices[`G${g.id}_LEV`]   = 20;
+    prevPrices[`G${g.id}`]   = 100;
+    prevPrices[`G${g.id}_INV`] = 20;
+    prevPrices[`G${g.id}_LEV`] = 20;
+    shareSupply[`G${g.id}`]  = 60;
+  });
+  return { students, groups, prices, prevPrices, shareSupply, marketOpen:false };
+}
+
+// ── Firebase 실시간 구독 ────────────────────────────────
+function subscribeState() {
+  onValue(ref(db, 'state'), snap => {
+    if (!snap.exists()) return;
+    fbState = snap.val();
+    // history가 없으면 빈 배열로
+    if (fbState.students) {
+      Object.keys(fbState.students).forEach(name => {
+        if (!fbState.students[name].history) fbState.students[name].history = [];
+        if (!fbState.students[name].holdings) fbState.students[name].holdings = {};
+      });
+    }
+    updateStatusUI();
+    if (currentUser) renderCurrentTab();
+    else renderMain();
+  }, err => {
+    document.getElementById('main-content').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div>Firebase 연결 실패<br><small style="color:var(--text3)">${err.message}</small></div>`;
+  });
+}
+
+// ── 10초 가격 틱 (관리자가 아닌 첫 접속자가 담당) ────────
+function startPriceTick() {
+  if (tickTimer) return;
+  tickTimer = setInterval(async () => {
+    if (!fbState || !fbState.marketOpen) return;
+    const updates = {};
+    const newPrev = { ...fbState.prices };
+    GROUPS.forEach(g => {
+      const key = `G${g.id}`;
+      const score   = fbState.groups?.[g.id]?.totalScore ?? 1000;
+      const supply  = fbState.shareSupply?.[key] ?? 60;
+      const cur     = fbState.prices?.[key] ?? 100;
+      const fundamental = score / supply;
+      const noise   = (Math.random() - 0.485) * 0.06;
+      const drift   = (fundamental - cur) * 0.15;
+      const newBase = Math.max(1, Math.round((cur + drift + cur * noise) * 10) / 10);
+      const basePct = (newBase - cur) / cur;
+
+      updates[`state/prices/${key}`]     = newBase;
+      updates[`state/prices/${key}_INV`] = Math.max(1, Math.round((fbState.prices[`${key}_INV`] ?? 20) * (1 - basePct) * 10) / 10);
+      updates[`state/prices/${key}_LEV`] = Math.max(1, Math.round((fbState.prices[`${key}_LEV`] ?? 20) * (1 + basePct * 2) * 10) / 10);
+    });
+    // 이전 가격 저장
+    GROUPS.forEach(g => {
+      ['', '_INV', '_LEV'].forEach(suf => {
+        const k = `G${g.id}${suf}`;
+        updates[`state/prevPrices/${k}`] = fbState.prices?.[k] ?? (suf ? 20 : 100);
+      });
+    });
+    await update(ref(db), updates);
+  }, 10000);
+}
+
+// ── 유틸 ──────────────────────────────────────────────
+function fmt(n) { return Math.round(n).toLocaleString(); }
+function fmtF(n, d=1) { return Number(n).toFixed(d); }
+function pctChange(ticker) {
+  const cur  = fbState?.prices?.[ticker] ?? 0;
+  const prev = fbState?.prevPrices?.[ticker] ?? cur;
+  return prev ? ((cur - prev) / prev * 100) : 0;
+}
+function getAvailShares(ticker) {
+  if (ticker.includes('_INV') || ticker.includes('_LEV')) return 999999;
+  const supply = fbState?.shareSupply?.[ticker] ?? 60;
+  let held = 0;
+  Object.values(fbState?.students ?? {}).forEach(s => held += s.holdings?.[ticker] ?? 0);
+  return Math.max(0, supply - held);
+}
+function calcStockVal(sname) {
+  const stu = fbState?.students?.[sname];
+  if (!stu) return 0;
+  let v = 0;
+  Object.entries(stu.holdings ?? {}).forEach(([t, q]) => v += q * (fbState.prices?.[t] ?? 0));
+  return v;
+}
+function calcTotal(sname) {
+  const stu = fbState?.students?.[sname];
+  return (stu?.deposit ?? 0) + calcStockVal(sname);
+}
+function initVal(gid) {
+  const g = GROUPS.find(g => g.id === gid);
+  return 1000 + 100 * Math.floor(60 / g.members.length);
+}
+function getStocks() {
+  return GROUPS.flatMap((g, i) => [
+    { ticker:`G${g.id}`,       name:g.name,              type:'base', group:g.id, color:GROUP_COLORS[i] },
+    { ticker:`G${g.id}_INV`,   name:`${g.name} 인버스`,  type:'inv',  group:g.id, color:GROUP_COLORS[i] },
+    { ticker:`G${g.id}_LEV`,   name:`${g.name} 레버리지`, type:'lev', group:g.id, color:GROUP_COLORS[i] },
+  ]);
+}
+
+// ── UI 업데이트 ─────────────────────────────────────────
+function updateStatusUI() {
+  const dot  = document.getElementById('status-dot');
+  const txt  = document.getElementById('status-text');
+  if (!dot || !txt) return;
+  const open = fbState?.marketOpen;
+  dot.classList.toggle('open', !!open);
+  txt.textContent = open ? '개장 중' : '폐장';
+}
+
+// ── 로그인 ─────────────────────────────────────────────
+function renderLogin() {
+  return `
+    <div class="login-screen">
+      <div class="login-card">
+        <h2>📊 우리반 주식시장</h2>
+        <p>이름을 선택하고 입장하세요</p>
+        <select id="login-select">
+          <option value="">— 이름 선택 —</option>
+          ${GROUPS.map(g => `
+            <optgroup label="${g.name}">
+              ${g.members.map(m => `<option value="${m}">${m}</option>`).join('')}
+            </optgroup>`).join('')}
+        </select>
+        <button class="btn-primary" id="login-btn">입장하기</button>
+      </div>
+    </div>`;
+}
+
+// ── 메인 렌더 ───────────────────────────────────────────
+function renderMain() {
+  const el = document.getElementById('main-content');
+  if (!currentUser) { el.innerHTML = renderLogin(); attachLoginBtn(); return; }
+  el.innerHTML = `
+    <nav class="tabs" id="tabs-nav">
+      <button class="tab ${activeTab==='market'?'active':''}"    data-tab="market">🏪 시장</button>
+      <button class="tab ${activeTab==='portfolio'?'active':''}" data-tab="portfolio">💼 포트폴리오</button>
+      <button class="tab ${activeTab==='history'?'active':''}"   data-tab="history">📋 거래내역</button>
+      <button class="tab ${activeTab==='ranking'?'active':''}"   data-tab="ranking">🏆 순위</button>
+      <button class="tab ${activeTab==='assets'?'active':''}"    data-tab="assets">💰 자산확인</button>
+    </nav>
+    <div id="tab-content"></div>`;
+  document.getElementById('tabs-nav').addEventListener('click', e => {
+    const tab = e.target.dataset.tab;
+    if (!tab) return;
+    activeTab = tab;
+    selectedStock = null;
+    document.querySelectorAll('#tabs-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    renderCurrentTab();
+  });
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  const el = document.getElementById('tab-content');
+  if (!el || !fbState) return;
+  if (activeTab === 'market')     el.innerHTML = renderMarket();
+  if (activeTab === 'portfolio')  el.innerHTML = renderPortfolio();
+  if (activeTab === 'history')    el.innerHTML = renderHistory();
+  if (activeTab === 'ranking')    el.innerHTML = renderRanking();
+  if (activeTab === 'assets')     el.innerHTML = renderAssets();
+  attachTabListeners();
+}
+
+function attachLoginBtn() {
+  document.getElementById('login-btn')?.addEventListener('click', () => {
+    const name = document.getElementById('login-select')?.value;
+    if (!name) { showToast('이름을 선택해주세요', 'error'); return; }
+    currentUser = name;
+    const gName = GROUPS.find(g => g.id === fbState?.students?.[name]?.group)?.name ?? '';
+    document.getElementById('user-label').textContent = `${name} (${gName})`;
+    startPriceTick();
+    renderMain();
+  });
+}
+
+// ── 시장 탭 ────────────────────────────────────────────
+function renderMarket() {
+  const stocks = getStocks();
+  const closed = !fbState.marketOpen;
+  const banner = closed ? `<div class="closed-banner">🔒 현재 폐장 중입니다. 거래가 불가능합니다.</div>` : '';
+
+  function row(s) {
+    const price = fbState.prices?.[s.ticker] ?? 0;
+    const pct   = pctChange(s.ticker);
+    const up = pct > 0, dn = pct < 0;
+    const avail = getAvailShares(s.ticker);
+    const badge = s.type === 'base'
+      ? `<span class="badge badge-base">주식</span>`
+      : s.type === 'inv'
+        ? `<span class="badge badge-inv">인버스</span>`
+        : `<span class="badge badge-lev">레버리지</span>`;
+    const isSel = selectedStock === s.ticker;
+    return `
+      <div class="stock-row${isSel?' selected':''}" data-ticker="${s.ticker}">
+        <div class="s-info">
+          <div class="s-ticker">${s.ticker} ${badge}</div>
+          <div class="s-name">${s.name}</div>
+        </div>
+        <div class="s-price-col">
+          <div class="s-price" style="color:${s.color}">${fmtF(price)}점</div>
+          <div class="s-change ${up?'up':dn?'down':'flat'}">${up?'▲':dn?'▼':'—'} ${Math.abs(pct).toFixed(2)}%</div>
+        </div>
+        ${s.type==='base' ? `<div class="s-vol">${avail}주<br><span style="font-size:10px">잔여</span></div>` : '<div style="width:36px"></div>'}
+      </div>`;
+  }
+
+  const tradeHTML = selectedStock ? renderTradePanel() : '';
+  return `
+    ${banner}
+    <div class="section-title">📦 모둠 주식</div>
+    ${stocks.filter(s=>s.type==='base').map(row).join('')}
+    <div class="section-title">📉 인버스 상품</div>
+    ${stocks.filter(s=>s.type==='inv').map(row).join('')}
+    <div class="section-title">📈 레버리지 상품</div>
+    ${stocks.filter(s=>s.type==='lev').map(row).join('')}
+    ${tradeHTML}`;
+}
+
+function renderTradePanel() {
+  if (!selectedStock) return '';
+  const stock = getStocks().find(s => s.ticker === selectedStock);
+  if (!stock) return '';
+  const stu   = fbState.students[currentUser];
+  const price = fbState.prices?.[selectedStock] ?? 0;
+  const held  = stu.holdings?.[selectedStock] ?? 0;
+  const avail = getAvailShares(selectedStock);
+  const isBuy = activeTradeType === 'buy';
+  const maxB  = Math.floor(stu.deposit / price);
+  const maxS  = held;
+
+  return `
+    <div class="trade-panel" id="trade-panel">
+      <h3 style="color:${stock.color}">${stock.name} 거래</h3>
+      <div class="trade-tabs">
+        <button class="trade-tab buy${isBuy?' active':''}" data-tt="buy">매수</button>
+        <button class="trade-tab sell${!isBuy?' active':''}" data-tt="sell">매도</button>
+      </div>
+      <div class="trade-row"><label>현재가</label><span style="font-size:15px;font-weight:700;color:${stock.color}">${fmtF(price)}점</span></div>
+      <div class="trade-row">
+        <label>수량</label>
+        <input type="number" id="trade-qty" min="1" max="${isBuy?maxB:maxS}" value="1" />
+        <button id="btn-max" style="padding:8px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:'Noto Sans KR',sans-serif;">최대</button>
+      </div>
+      <div class="trade-summary">
+        <div class="row"><span>보유 예금</span><span>${fmt(stu.deposit)}점</span></div>
+        <div class="row"><span>보유 수량</span><span>${held}주</span></div>
+        ${stock.type==='base' ? `<div class="row"><span>잔여 매물</span><span>${avail}주</span></div>` : ''}
+        <div class="row"><span>${isBuy?'매수':'매도'} 금액</span><span id="trade-total">${fmtF(price)}점</span></div>
+      </div>
+      <button class="btn-trade ${isBuy?'buy':'sell'}" id="btn-execute" ${!fbState.marketOpen?'disabled':''}>
+        ${!fbState.marketOpen ? '🔒 폐장 중' : (isBuy ? '매수하기' : '매도하기')}
+      </button>
+    </div>`;
+}
+
+function attachTabListeners() {
+  // stock row click
+  document.querySelectorAll('.stock-row[data-ticker]').forEach(el => {
+    el.addEventListener('click', () => {
+      const t = el.dataset.ticker;
+      selectedStock = selectedStock === t ? null : t;
+      activeTradeType = 'buy';
+      renderCurrentTab();
+      if (selectedStock) setTimeout(() => document.getElementById('trade-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}), 80);
+    });
+  });
+  // trade type tabs
+  document.querySelectorAll('.trade-tab[data-tt]').forEach(btn => {
+    btn.addEventListener('click', () => { activeTradeType = btn.dataset.tt; renderCurrentTab(); });
+  });
+  // qty input
+  const qtyEl = document.getElementById('trade-qty');
+  if (qtyEl) qtyEl.addEventListener('input', updateTradeTotal);
+  // max button
+  document.getElementById('btn-max')?.addEventListener('click', () => {
+    if (!selectedStock) return;
+    const stu   = fbState.students[currentUser];
+    const price = fbState.prices?.[selectedStock] ?? 1;
+    const held  = stu.holdings?.[selectedStock] ?? 0;
+    const avail = getAvailShares(selectedStock);
+    const max   = activeTradeType === 'buy' ? Math.min(Math.floor(stu.deposit / price), avail) : held;
+    if (qtyEl) { qtyEl.value = max; updateTradeTotal(); }
+  });
+  // execute button
+  document.getElementById('btn-execute')?.addEventListener('click', executeTrade);
+  // portfolio quick trade
+  document.querySelectorAll('[data-quick-ticker]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedStock = btn.dataset.quickTicker;
+      activeTradeType = btn.dataset.quickType;
+      activeTab = 'market';
+      renderMain();
+      setTimeout(() => document.getElementById('trade-panel')?.scrollIntoView({behavior:'smooth',block:'start'}), 150);
+    });
+  });
+}
+
+function updateTradeTotal() {
+  const qty = parseInt(document.getElementById('trade-qty')?.value) || 0;
+  const el  = document.getElementById('trade-total');
+  if (el) el.textContent = fmtF((qty * (fbState.prices?.[selectedStock] ?? 0))) + '점';
+}
+
+// ── 거래 실행 (Firebase Transaction) ──────────────────
+async function executeTrade() {
+  if (!fbState.marketOpen) return showToast('폐장 중에는 거래할 수 없습니다', 'error');
+  const qty   = parseInt(document.getElementById('trade-qty')?.value) || 0;
+  if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
+  const price = fbState.prices?.[selectedStock] ?? 0;
+  const total = qty * price;
+  const stu   = fbState.students[currentUser];
+  const isBuy = activeTradeType === 'buy';
+
+  if (isBuy) {
+    if (total > stu.deposit) return showToast('예금이 부족합니다', 'error');
+    const avail = getAvailShares(selectedStock);
+    if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV') && qty > avail) {
+      return showToast(`매물 부족 (잔여: ${avail}주)`, 'error');
+    }
+  } else {
+    const held = stu.holdings?.[selectedStock] ?? 0;
+    if (qty > held) return showToast('보유 수량이 부족합니다', 'error');
+  }
+
+  const btn = document.getElementById('btn-execute');
+  if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+
+  try {
+    const stuRef  = ref(db, `state/students/${currentUser}`);
+    await runTransaction(stuRef, current => {
+      if (!current) return current;
+      if (isBuy) {
+        current.deposit = Math.round((current.deposit - total) * 100) / 100;
+        current.holdings = current.holdings ?? {};
+        current.holdings[selectedStock] = (current.holdings[selectedStock] ?? 0) + qty;
+      } else {
+        const held = current.holdings?.[selectedStock] ?? 0;
+        if (held < qty) return; // abort
+        current.deposit = Math.round((current.deposit + total) * 100) / 100;
+        current.holdings[selectedStock] = held - qty;
+      }
+      if (!current.history) current.history = [];
+      current.history.push({
+        type: isBuy ? 'buy' : 'sell',
+        ticker: selectedStock,
+        qty, price, total,
+        date: new Date().toLocaleString('ko-KR')
+      });
+      return current;
+    });
+
+    showToast(`${isBuy ? '매수' : '매도'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
+    selectedStock = null;
+    renderCurrentTab();
+  } catch(e) {
+    showToast('거래 중 오류가 발생했습니다', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = isBuy ? '매수하기' : '매도하기'; }
+  }
+}
+
+// ── 포트폴리오 탭 ────────────────────────────────────────
+function renderPortfolio() {
+  const stu    = fbState.students[currentUser];
+  const stocks = getStocks();
+  const held   = stocks.filter(s => (stu.holdings?.[s.ticker] ?? 0) > 0);
+  const closed = !fbState.marketOpen;
+
+  if (held.length === 0) return `
+    ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
+    <div class="empty"><div class="empty-icon">📦</div>보유 종목이 없습니다.<br>시장 탭에서 주식을 구매해보세요!</div>`;
+
+  const stockVal = held.reduce((sum, s) => sum + (stu.holdings[s.ticker] ?? 0) * (fbState.prices?.[s.ticker] ?? 0), 0);
+  return `
+    ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">주식 평가액</div><div class="metric-value blue">${fmt(stockVal)}점</div></div>
+      <div class="metric"><div class="metric-label">보유 예금</div><div class="metric-value neutral">${fmt(stu.deposit)}점</div></div>
+    </div>
+    <div class="section-title">보유 종목</div>
+    ${held.map(s => {
+      const qty  = stu.holdings[s.ticker] ?? 0;
+      const cur  = fbState.prices?.[s.ticker] ?? 0;
+      const curV = qty * cur;
+      const buys = (stu.history ?? []).filter(h => h.type === 'buy' && h.ticker === s.ticker);
+      const avgB = buys.length ? buys.reduce((a,h)=>a+h.total,0) / buys.reduce((a,h)=>a+h.qty,0) : cur;
+      const pnl  = (cur - avgB) * qty;
+      const pnlP = avgB > 0 ? ((cur - avgB) / avgB * 100) : 0;
+      const up   = pnl >= 0;
+      return `
+        <div class="holding-card">
+          <div class="holding-header">
+            <div>
+              <div class="holding-ticker" style="color:${s.color}">${s.ticker}</div>
+              <div class="holding-qty">${s.name} · ${qty}주 보유</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:16px;font-weight:700">${fmt(curV)}점</div>
+              <div style="font-size:12px;color:var(--${up?'green':'red'})">${up?'+':''}${fmt(pnl)}점 (${up?'+':''}${pnlP.toFixed(2)}%)</div>
+            </div>
+          </div>
+          <div class="holding-stats">
+            <div><div class="h-stat">평균 매수가</div><div class="h-stat-val">${fmtF(avgB)}점</div></div>
+            <div><div class="h-stat">현재가</div><div class="h-stat-val">${fmtF(cur)}점</div></div>
+            <div><div class="h-stat">평가 손익</div><div class="h-stat-val" style="color:var(--${up?'green':'red'})">${up?'+':''}${fmt(pnl)}점</div></div>
+          </div>
+          ${fbState.marketOpen ? `
+          <div class="holding-actions">
+            <button class="btn-sm buy"  data-quick-ticker="${s.ticker}" data-quick-type="buy">+ 매수</button>
+            <button class="btn-sm sell" data-quick-ticker="${s.ticker}" data-quick-type="sell">− 매도</button>
+          </div>` : ''}
+        </div>`;
+    }).join('')}`;
+}
+
+// ── 거래내역 탭 ──────────────────────────────────────────
+function renderHistory() {
+  const hist = [...(fbState.students[currentUser]?.history ?? [])].reverse();
+  if (!hist.length) return `<div class="empty"><div class="empty-icon">📋</div>거래 내역이 없습니다.</div>`;
+  const stocks = getStocks();
+  return hist.map(h => {
+    const stock = stocks.find(s => s.ticker === h.ticker);
+    const isBuy = h.type === 'buy';
+    return `
+      <div class="history-item">
+        <span class="hist-badge ${h.type}">${isBuy?'매수':'매도'}</span>
+        <div class="hist-main">
+          <div class="hist-name">${stock?.name ?? h.ticker}</div>
+          <div class="hist-detail">${h.qty}주 × ${fmtF(h.price)}점</div>
+        </div>
+        <div class="hist-amount">
+          <div class="hist-total ${isBuy?'down':'up'}">${isBuy?'-':'+'}${fmt(h.total)}점</div>
+          <div class="hist-date">${h.date}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── 순위 탭 ─────────────────────────────────────────────
+function renderRanking() {
+  const ranked = ALL_STUDENTS.map(s => ({
+    name:s.name, group:s.group, total: calcTotal(s.name)
+  })).sort((a,b) => b.total - a.total);
+
+  return ranked.map((p, i) => {
+    const isMe = p.name === currentUser;
+    const g    = GROUPS.find(g => g.id === p.group);
+    const ret  = ((p.total - initVal(p.group)) / initVal(p.group) * 100);
+    const up   = ret >= 0;
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
+    return `
+      <div class="rank-item${isMe?' me':''}">
+        <div class="rank-num ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${medal}</div>
+        <div class="rank-info">
+          <div class="rank-name">${p.name}${isMe?' <span style="font-size:11px;color:var(--blue);">나</span>':''}</div>
+          <div class="rank-group">${g?.name}</div>
+        </div>
+        <div class="rank-right">
+          <div class="rank-total">${fmt(p.total)}점</div>
+          <div class="rank-ret ${up?'up':'down'}">${up?'+':''}${ret.toFixed(2)}%</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── 자산확인 탭 ─────────────────────────────────────────
+function renderAssets() {
+  const stu  = fbState.students[currentUser];
+  const sv   = calcStockVal(currentUser);
+  const total = (stu?.deposit ?? 0) + sv;
+  const dep  = stu?.deposit ?? 0;
+  const iv   = initVal(stu?.group);
+  const ret  = ((total - iv) / iv * 100);
+  const up   = ret >= 0;
+  const cashP  = total > 0 ? dep / total * 100 : 0;
+  const stockP = total > 0 ? sv  / total * 100 : 0;
+
+  const stocks = getStocks();
+  const held = stocks.filter(s => (stu?.holdings?.[s.ticker] ?? 0) > 0);
+
+  return `
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">총 자산</div><div class="metric-value ${up?'up':'down'}">${fmt(total)}점</div><div class="metric-sub ${up?'up':'down'}">${up?'+':''}${ret.toFixed(2)}%</div></div>
+      <div class="metric"><div class="metric-label">손익</div><div class="metric-value ${up?'up':'down'}">${up?'+':''}${fmt(total-iv)}점</div></div>
+    </div>
+    <div class="asset-breakdown">
+      <h3>자산 구성</h3>
+      <div class="asset-row"><span class="asset-label">예금 (현금)</span><span>${fmt(dep)}점</span></div>
+      <div class="asset-row"><span class="asset-label">주식 평가액</span><span>${fmt(sv)}점</span></div>
+      <div class="asset-row"><span class="asset-label">총 자산</span><span>${fmt(total)}점</span></div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:10px;color:var(--text2);">자산 비율</h3>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px;">
+        <span>예금 ${cashP.toFixed(1)}%</span><span>주식 ${stockP.toFixed(1)}%</span>
+      </div>
+      <div style="height:10px;background:var(--bg4);border-radius:5px;overflow:hidden;display:flex;">
+        <div style="width:${cashP.toFixed(1)}%;background:var(--blue);border-radius:5px 0 0 5px;"></div>
+        <div style="width:${stockP.toFixed(1)}%;background:var(--green);border-radius:0 5px 5px 0;"></div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;">
+        <span style="color:var(--blue);">■ 예금</span><span style="color:var(--green);">■ 주식</span>
+      </div>
+    </div>
+    ${held.length > 0 ? `
+      <div class="section-title">보유 종목 상세</div>
+      ${held.map(s => {
+        const qty = stu.holdings[s.ticker] ?? 0;
+        const p   = fbState.prices?.[s.ticker] ?? 0;
+        return `<div class="holding-stock-item">
+          <div style="display:flex;justify-content:space-between;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;color:${s.color}">${s.ticker}</span>
+            <span style="font-weight:700">${fmt(qty*p)}점</span>
+          </div>
+          <div style="color:var(--text2);margin-top:3px;">${s.name} · ${qty}주 × ${fmtF(p)}점</div>
+        </div>`;
+      }).join('')}` : ''}`;
+}
+
+// ── 토스트 ────────────────────────────────────────────
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type} show`;
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── 시작 ─────────────────────────────────────────────
+await ensureInitialized();
+subscribeState();
+</script>
+</body>
+</html>

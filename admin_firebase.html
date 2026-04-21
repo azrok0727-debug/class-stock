@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우리반 주식시장 — 관리자</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;
+  --border:#30363d;--border2:#484f58;
+  --text:#e6edf3;--text2:#8b949e;--text3:#656d76;
+  --green:#3fb950;--green-bg:rgba(63,185,80,0.15);
+  --red:#f85149;--red-bg:rgba(248,81,73,0.15);
+  --blue:#58a6ff;--blue-bg:rgba(88,166,255,0.12);
+  --orange:#f0883e;--orange-bg:rgba(240,136,62,0.12);
+  --purple:#bc8cff;
+  --radius:8px;--radius-lg:12px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+.app{max-width:960px;margin:0 auto;padding:0 16px 80px;}
+.header{padding:20px 0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.header h1{font-size:17px;font-weight:700;}
+.header p{font-size:12px;color:var(--orange);margin-top:2px;font-weight:600;}
+.market-ctrl{display:flex;align-items:center;gap:10px;}
+.market-status-big{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;}
+.status-dot{width:10px;height:10px;border-radius:50%;background:var(--red);}
+.status-dot.open{background:var(--green);box-shadow:0 0 8px var(--green);}
+.login-screen{padding:60px 0;}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px;max-width:360px;margin:0 auto;text-align:center;}
+.login-card h2{font-size:20px;font-weight:700;margin-bottom:8px;}
+.login-card p{font-size:13px;color:var(--text2);margin-bottom:24px;}
+.input-field{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Noto Sans KR',sans-serif;outline:none;margin-bottom:10px;}
+.input-field:focus{border-color:var(--blue);}
+.btn-primary{width:100%;padding:11px;font-size:14px;font-weight:700;background:var(--orange);border:none;border-radius:var(--radius);color:white;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap;}
+.tab{padding:8px 16px;font-size:13px;font-weight:600;border-radius:var(--radius);border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text2);font-family:'Noto Sans KR',sans-serif;transition:all 0.15s;}
+.tab.active{background:var(--bg3);color:var(--text);border-color:var(--border2);}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;}
+.card h2{font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.section-tag{font-size:11px;padding:3px 8px;border-radius:4px;font-weight:600;background:var(--orange-bg);color:var(--orange);}
+.btn{padding:8px 16px;font-size:13px;font-weight:700;border-radius:var(--radius);border:1px solid;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all 0.15s;}
+.btn-open{background:var(--green);border-color:var(--green);color:#0d1117;}
+.btn-close{background:var(--red);border-color:var(--red);color:white;}
+.btn-save{background:var(--blue);border-color:var(--blue);color:#0d1117;}
+.btn-danger{background:transparent;border-color:var(--red);color:var(--red);}
+.btn-danger:hover{background:var(--red-bg);}
+.btn-sm{padding:5px 10px;font-size:12px;font-weight:700;border-radius:6px;border:1px solid;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all 0.15s;}
+.btn-sm.blue{border-color:var(--blue);color:var(--blue);background:transparent;}
+.btn-sm.blue:hover{background:var(--blue-bg);}
+.btn-sm.green{border-color:var(--green);color:var(--green);background:transparent;}
+.btn-sm.green:hover{background:var(--green-bg);}
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{padding:8px 10px;text-align:left;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);font-weight:600;}
+.data-table td{padding:9px 10px;border-bottom:1px solid var(--border);}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:var(--bg3);}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
+.metric{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+.metric-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+.metric-value{font-size:20px;font-weight:700;}
+.metric-value.green{color:var(--green);}
+.metric-value.red{color:var(--red);}
+.metric-value.blue{color:var(--blue);}
+.metric-value.orange{color:var(--orange);}
+.inline-edit{display:flex;align-items:center;gap:6px;}
+.inline-input{width:85px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;font-family:'Noto Sans KR',sans-serif;outline:none;}
+.inline-input:focus{border-color:var(--blue);}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:var(--radius);font-size:13px;font-weight:700;z-index:200;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+.toast.success{background:var(--green);color:#0d1117;}
+.toast.error{background:var(--red);color:white;}
+.toast.info{background:var(--blue);color:#0d1117;}
+.up{color:var(--green);}
+.down{color:var(--red);}
+.warn-box{background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--red);}
+.info-box{background:var(--blue-bg);border:1px solid var(--blue);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--blue);}
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;color:var(--text2);}
+.spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--orange);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div><h1>⚙️ 우리반 주식시장 — 관리자</h1><p>ADMIN PANEL</p></div>
+    <div class="market-ctrl" id="market-ctrl"></div>
+  </div>
+  <div id="main-content">
+    <div class="loading-screen"><div class="spinner"></div><span>Firebase 연결 중...</span></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ── Firebase 설정 ──────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyDEGBu8sFChEdtnQEEC1FFZaAIwUr9fWpc",
+  authDomain: "stock-c985f.firebaseapp.com",
+  databaseURL: "https://stock-c985f-default-rtdb.firebaseio.com",
+  projectId: "stock-c985f",
+  storageBucket: "stock-c985f.firebasestorage.app",
+  messagingSenderId: "1082843629086",
+  appId: "1:1082843629086:web:58c6b2ca396cb7842d100f"
+};
+// ────────────────────────────────────────────────────────
+
+const fbApp = initializeApp(firebaseConfig);
+const db    = getDatabase(fbApp);
+
+const GROUPS = [
+  { id:1, name:'1모둠', members:['김수현','주시연','신재은','이주호'] },
+  { id:2, name:'2모둠', members:['이세은','이서준','이다영','박준서'] },
+  { id:3, name:'3모둠', members:['정서윤','조혜원','임승언','김지성'] },
+  { id:4, name:'4모둠', members:['황세현','김지원','김주이','이강민'] },
+  { id:5, name:'5모둠', members:['강민채','서은수','최상윤','최효민','이윤아'] },
+  { id:6, name:'6모둠', members:['김준우','민나진','윤지환','이수빈','권용민'] },
+];
+const ALL_STUDENTS = GROUPS.flatMap(g => g.members.map(m => ({ name:m, group:g.id })));
+const GROUP_COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#ff7b72','#d2a679'];
+const ADMIN_PW = 'teacher2024';
+
+let fbState   = null;
+let isAdmin   = false;
+let activeTab = 'dashboard';
+
+// ── 유틸 ──────────────────────────────────────────────
+function fmt(n)    { return Math.round(n).toLocaleString(); }
+function fmtF(n,d=1){ return Number(n).toFixed(d); }
+function pct(ticker) {
+  const cur  = fbState?.prices?.[ticker] ?? 0;
+  const prev = fbState?.prevPrices?.[ticker] ?? cur;
+  return prev ? ((cur - prev) / prev * 100) : 0;
+}
+function calcTotal(sname) {
+  const s = fbState?.students?.[sname];
+  if (!s) return 0;
+  let v = s.deposit ?? 0;
+  Object.entries(s.holdings ?? {}).forEach(([t,q]) => v += q * (fbState.prices?.[t] ?? 0));
+  return v;
+}
+function calcStockVal(sname) {
+  const s = fbState?.students?.[sname];
+  let v = 0;
+  Object.entries(s?.holdings ?? {}).forEach(([t,q]) => v += q * (fbState.prices?.[t] ?? 0));
+  return v;
+}
+function initVal(gid) {
+  const g = GROUPS.find(g=>g.id===gid);
+  return 1000 + 100 * Math.floor(60 / g.members.length);
+}
+function getHeld(ticker) {
+  let h = 0;
+  Object.values(fbState?.students ?? {}).forEach(s => h += s.holdings?.[ticker] ?? 0);
+  return h;
+}
+
+// ── Firebase 구독 ───────────────────────────────────────
+function subscribeState() {
+  onValue(ref(db, 'state'), snap => {
+    if (!snap.exists()) return;
+    fbState = snap.val();
+    GROUPS.forEach(g => g.members.forEach(m => {
+      if (!fbState.students?.[m]) return;
+      if (!fbState.students[m].history)  fbState.students[m].history  = [];
+      if (!fbState.students[m].holdings) fbState.students[m].holdings = {};
+    }));
+    updateMarketCtrl();
+    if (isAdmin) renderTab();
+  }, err => showToast('Firebase 연결 실패: ' + err.message, 'error'));
+}
+
+function updateMarketCtrl() {
+  const mc = document.getElementById('market-ctrl');
+  if (!mc || !isAdmin) return;
+  mc.innerHTML = `
+    <div class="market-status-big">
+      <div class="status-dot ${fbState?.marketOpen?'open':''}"></div>
+      <span>${fbState?.marketOpen ? '개장 중' : '폐장'}</span>
+    </div>
+    <button class="btn ${fbState?.marketOpen?'btn-close':'btn-open'}" id="toggle-market">
+      ${fbState?.marketOpen ? '🔒 폐장하기' : '🔓 개장하기'}
+    </button>`;
+  document.getElementById('toggle-market')?.addEventListener('click', toggleMarket);
+}
+
+async function toggleMarket() {
+  const newVal = !fbState.marketOpen;
+  await update(ref(db, 'state'), { marketOpen: newVal });
+  showToast(newVal ? '장이 개장되었습니다!' : '장이 폐장되었습니다.', newVal?'success':'info');
+}
+
+// ── 로그인 ─────────────────────────────────────────────
+function renderLogin() {
+  return `
+    <div class="login-screen">
+      <div class="login-card">
+        <h2>⚙️ 관리자 패널</h2>
+        <p>관리자 비밀번호를 입력해주세요</p>
+        <input class="input-field" type="password" id="pw-input" placeholder="비밀번호" />
+        <button class="btn-primary" id="login-btn">로그인</button>
+        <p style="font-size:11px;color:var(--text3);margin-top:12px;">기본 비밀번호: teacher2024</p>
+      </div>
+    </div>`;
+}
+
+function attachLoginBtn() {
+  const btn = document.getElementById('login-btn');
+  const inp = document.getElementById('pw-input');
+  inp?.addEventListener('keydown', e => { if(e.key==='Enter') btn?.click(); });
+  btn?.addEventListener('click', () => {
+    if (inp?.value === ADMIN_PW) {
+      isAdmin = true;
+      renderAdminMain();
+      showToast('관리자로 로그인되었습니다', 'success');
+    } else {
+      showToast('비밀번호가 틀렸습니다', 'error');
+    }
+  });
+}
+
+// ── 관리자 메인 ─────────────────────────────────────────
+function renderAdminMain() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="tabs" id="admin-tabs">
+      <button class="tab ${activeTab==='dashboard'?'active':''}" data-tab="dashboard">📊 대시보드</button>
+      <button class="tab ${activeTab==='students'?'active':''}"  data-tab="students">👥 학생 관리</button>
+      <button class="tab ${activeTab==='groups'?'active':''}"    data-tab="groups">🏢 모둠 점수</button>
+      <button class="tab ${activeTab==='stocks'?'active':''}"    data-tab="stocks">📈 주식 관리</button>
+      <button class="tab ${activeTab==='transactions'?'active':''}" data-tab="transactions">📋 거래내역</button>
+      <button class="tab" data-tab="reset" style="color:var(--red)">⚠️ 초기화</button>
+    </div>
+    <div id="tab-content"></div>`;
+  document.getElementById('admin-tabs').addEventListener('click', e => {
+    const tab = e.target.dataset.tab;
+    if (!tab) return;
+    activeTab = tab;
+    document.querySelectorAll('#admin-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+    renderTab();
+  });
+  updateMarketCtrl();
+  renderTab();
+}
+
+function renderTab() {
+  const el = document.getElementById('tab-content');
+  if (!el || !fbState) return;
+  if (activeTab === 'dashboard')    el.innerHTML = renderDashboard();
+  if (activeTab === 'students')     el.innerHTML = renderStudents();
+  if (activeTab === 'groups')       el.innerHTML = renderGroups();
+  if (activeTab === 'stocks')       el.innerHTML = renderStocks();
+  if (activeTab === 'transactions') el.innerHTML = renderTransactions();
+  if (activeTab === 'reset')        el.innerHTML = renderReset();
+  attachTabListeners();
+}
+
+// ── 대시보드 ────────────────────────────────────────────
+function renderDashboard() {
+  const txCount = ALL_STUDENTS.reduce((s,st) => s + (fbState.students?.[st.name]?.history?.length ?? 0), 0);
+  const ranked  = ALL_STUDENTS.map(s => ({ name:s.name, group:s.group, total:calcTotal(s.name) })).sort((a,b)=>b.total-a.total);
+
+  return `
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">시장 상태</div><div class="metric-value ${fbState.marketOpen?'green':'red'}">${fbState.marketOpen?'개장 중':'폐장'}</div></div>
+      <div class="metric"><div class="metric-label">전체 학생</div><div class="metric-value blue">${ALL_STUDENTS.length}명</div></div>
+      <div class="metric"><div class="metric-label">총 거래 횟수</div><div class="metric-value orange">${txCount}건</div></div>
+      <div class="metric"><div class="metric-label">1위 자산</div><div class="metric-value">${ranked[0] ? fmt(ranked[0].total) : 0}점</div></div>
+    </div>
+    <div class="card">
+      <h2>📈 실시간 주가 <span class="section-tag">LIVE</span></h2>
+      <table class="data-table">
+        <thead><tr><th>종목</th><th>모둠</th><th>현재가</th><th>등락</th><th>유통/발행</th><th>모둠 점수</th></tr></thead>
+        <tbody>
+          ${GROUPS.map((g,i) => {
+            const key  = `G${g.id}`;
+            const pr   = fbState.prices?.[key] ?? 0;
+            const p    = pct(key);
+            const up=p>0,dn=p<0;
+            const held = getHeld(key);
+            const sup  = fbState.shareSupply?.[key] ?? 60;
+            return `<tr>
+              <td style="font-family:'Space Grotesk',sans-serif;font-weight:700;color:${GROUP_COLORS[i]}">${key}</td>
+              <td>${g.name}</td>
+              <td style="font-weight:700">${fmtF(pr)}</td>
+              <td class="${up?'up':dn?'down':''}">${up?'▲':dn?'▼':'—'}${Math.abs(p).toFixed(2)}%</td>
+              <td>${held} / ${sup}</td>
+              <td>${fmt(fbState.groups?.[g.id]?.totalScore ?? 1000)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>🏆 자산 순위 TOP 5</h2>
+      <table class="data-table">
+        <thead><tr><th>#</th><th>학생</th><th>모둠</th><th>총 자산</th><th>수익률</th></tr></thead>
+        <tbody>
+          ${ranked.slice(0,5).map((p,i) => {
+            const g   = GROUPS.find(g=>g.id===p.group);
+            const ret = ((p.total - initVal(p.group)) / initVal(p.group) * 100);
+            return `<tr>
+              <td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td>
+              <td style="font-weight:600">${p.name}</td>
+              <td>${g?.name}</td>
+              <td style="font-weight:700">${fmt(p.total)}점</td>
+              <td class="${ret>=0?'up':'down'}">${ret>=0?'+':''}${ret.toFixed(2)}%</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── 학생 관리 ────────────────────────────────────────────
+function renderStudents() {
+  return `
+    <div class="info-box">💡 예금 수정 후 저장 버튼을 눌러주세요. 추가 버튼은 현재 예금에 입력한 금액을 더합니다.</div>
+    ${GROUPS.map((g,gi) => `
+      <div class="card">
+        <h2 style="color:${GROUP_COLORS[gi]}">${g.name}</h2>
+        <table class="data-table">
+          <thead><tr><th>학생</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th></tr></thead>
+          <tbody>
+            ${g.members.map(m => {
+              const stu = fbState.students?.[m] ?? {};
+              const sv  = calcStockVal(m);
+              const tot = (stu.deposit ?? 0) + sv;
+              return `<tr>
+                <td style="font-weight:600">${m}</td>
+                <td>${fmt(stu.deposit ?? 0)}점</td>
+                <td>${fmt(sv)}점</td>
+                <td style="font-weight:700">${fmt(tot)}점</td>
+                <td>
+                  <div class="inline-edit">
+                    <input class="inline-input" type="number" data-dep-name="${m}" value="${Math.round(stu.deposit ?? 0)}" />
+                    <button class="btn-sm blue" data-save-dep="${m}">저장</button>
+                    <button class="btn-sm green" data-add-dep="${m}">+추가</button>
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`).join('')}`;
+}
+
+// ── 모둠 점수 ────────────────────────────────────────────
+function renderGroups() {
+  return `
+    <div class="info-box">💡 모둠 총점을 수정하면 주가 기준가에 반영됩니다. 점수 변화는 10초마다 주가에 자연스럽게 반영됩니다.</div>
+    <div class="card">
+      <h2>🏢 모둠 총점 관리</h2>
+      <table class="data-table">
+        <thead><tr><th>모둠</th><th>구성원</th><th>현재 총점</th><th>주당 기준가</th><th>수정</th></tr></thead>
+        <tbody>
+          ${GROUPS.map((g,i) => {
+            const score  = fbState.groups?.[g.id]?.totalScore ?? 1000;
+            const supply = fbState.shareSupply?.[`G${g.id}`] ?? 60;
+            return `<tr>
+              <td style="font-weight:700;color:${GROUP_COLORS[i]}">${g.name}</td>
+              <td style="font-size:12px;color:var(--text2)">${g.members.join(', ')}</td>
+              <td style="font-weight:700">${fmt(score)}</td>
+              <td>${fmtF(score/supply)}점/주</td>
+              <td>
+                <div class="inline-edit">
+                  <input class="inline-input" type="number" data-score-gid="${g.id}" value="${score}" />
+                  <button class="btn-sm blue" data-save-score="${g.id}">저장</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>📊 학생별 보유 주식 현황</h2>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr><th>학생</th><th>모둠</th>${GROUPS.map(g=>`<th>${g.name}</th>`).join('')}<th>예금</th></tr></thead>
+          <tbody>
+            ${ALL_STUDENTS.map(s => {
+              const stu = fbState.students?.[s.name] ?? {};
+              const g   = GROUPS.find(g=>g.id===s.group);
+              return `<tr>
+                <td style="font-weight:600">${s.name}</td>
+                <td style="color:${GROUP_COLORS[s.group-1]}">${g?.name}</td>
+                ${GROUPS.map(g2 => {
+                  const q = stu.holdings?.[`G${g2.id}`] ?? 0;
+                  return `<td>${q>0 ? `<b>${q}</b>` : '<span style="color:var(--text3)">—</span>'}</td>`;
+                }).join('')}
+                <td>${fmt(stu.deposit ?? 0)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── 주식 관리 ────────────────────────────────────────────
+function renderStocks() {
+  return `
+    <div class="info-box">💡 발행 수량을 늘리면 공급 증가로 주가에 하방 압력이 생깁니다. 유통 중인 수량보다 줄일 수 없습니다.</div>
+    <div class="card">
+      <h2>📦 주식 발행 수량</h2>
+      <table class="data-table">
+        <thead><tr><th>종목</th><th>발행</th><th>유통</th><th>잔여</th><th>현재가</th><th>수정</th></tr></thead>
+        <tbody>
+          ${GROUPS.map((g,i) => {
+            const key  = `G${g.id}`;
+            const sup  = fbState.shareSupply?.[key] ?? 60;
+            const held = getHeld(key);
+            const avail= Math.max(0,sup-held);
+            const pr   = fbState.prices?.[key] ?? 0;
+            return `<tr>
+              <td style="font-family:'Space Grotesk',sans-serif;font-weight:700;color:${GROUP_COLORS[i]}">${key}</td>
+              <td>${sup}주</td><td>${held}주</td><td>${avail}주</td>
+              <td>${fmtF(pr)}점</td>
+              <td>
+                <div class="inline-edit">
+                  <input class="inline-input" type="number" data-supply-key="${key}" value="${sup}" min="${held}" />
+                  <button class="btn-sm blue" data-save-supply="${key}">저장</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>💹 주가 직접 설정</h2>
+      <div class="warn-box">⚠️ 주가를 직접 설정하면 모든 학생의 자산 평가에 즉시 반영됩니다.</div>
+      <table class="data-table">
+        <thead><tr><th>종목</th><th>유형</th><th>현재가</th><th>설정</th></tr></thead>
+        <tbody>
+          ${GROUPS.flatMap((g,i) => [
+            ['',`G${g.id}`,g.name,'기본주식'],
+            ['_INV',`G${g.id}_INV`,`${g.name} 인버스`,'인버스'],
+            ['_LEV',`G${g.id}_LEV`,`${g.name} 레버리지`,'레버리지'],
+          ].map(([,key,label,type]) => `<tr>
+            <td><span style="font-family:'Space Grotesk',sans-serif;color:${GROUP_COLORS[i]}">${key}</span></td>
+            <td style="font-size:12px;color:var(--text2)">${label}</td>
+            <td style="font-weight:700">${fmtF(fbState.prices?.[key] ?? 0)}</td>
+            <td>
+              <div class="inline-edit">
+                <input class="inline-input" type="number" step="0.1" data-price-key="${key}" value="${fmtF(fbState.prices?.[key] ?? 0)}" />
+                <button class="btn-sm blue" data-save-price="${key}">설정</button>
+              </div>
+            </td>
+          </tr>`)).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── 거래내역 ────────────────────────────────────────────
+function renderTransactions() {
+  const all = [];
+  ALL_STUDENTS.forEach(s => {
+    (fbState.students?.[s.name]?.history ?? []).forEach(h => all.push({...h, student:s.name, group:s.group}));
+  });
+  all.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  if (!all.length) return `<div class="card"><div style="text-align:center;padding:40px;color:var(--text2);">거래 내역이 없습니다.</div></div>`;
+  return `
+    <div class="card">
+      <h2>📋 전체 거래내역 <span class="section-tag">${all.length}건</span></h2>
+      <table class="data-table">
+        <thead><tr><th>일시</th><th>학생</th><th>구분</th><th>종목</th><th>수량</th><th>단가</th><th>총액</th></tr></thead>
+        <tbody>
+          ${all.map(h => {
+            const isBuy = h.type === 'buy';
+            const g     = GROUPS.find(g=>g.id===h.group);
+            return `<tr>
+              <td style="font-size:11px;color:var(--text3)">${h.date}</td>
+              <td style="font-weight:600">${h.student} <span style="font-size:11px;color:${GROUP_COLORS[h.group-1]}">${g?.name}</span></td>
+              <td><span style="font-size:11px;padding:2px 7px;border-radius:4px;font-weight:700;${isBuy?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">${isBuy?'매수':'매도'}</span></td>
+              <td style="font-family:'Space Grotesk',sans-serif;">${h.ticker}</td>
+              <td>${h.qty}주</td>
+              <td>${fmtF(h.price)}</td>
+              <td style="font-weight:700;${isBuy?'color:var(--red)':'color:var(--green)'}">${isBuy?'-':'+'}${fmt(h.total)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── 초기화 ──────────────────────────────────────────────
+function renderReset() {
+  return `
+    <div class="warn-box">⚠️ 초기화는 Firebase에서 데이터를 삭제합니다. 모든 학생의 기기에 즉시 반영되며 되돌릴 수 없습니다.</div>
+    <div class="card">
+      <h2>⚠️ 데이터 초기화</h2>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="background:var(--bg3);border-radius:var(--radius);padding:16px;">
+          <div style="font-weight:700;margin-bottom:6px;">💰 모든 학생 예금 초기화</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">모든 학생 예금을 1,000점으로 초기화합니다. 보유 주식은 유지됩니다.</div>
+          <button class="btn btn-danger" data-reset="deposits">예금만 초기화</button>
+        </div>
+        <div style="background:var(--bg3);border-radius:var(--radius);padding:16px;">
+          <div style="font-weight:700;margin-bottom:6px;">📊 주가 초기화</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">모든 주가를 초기값(100점/20점)으로 되돌립니다.</div>
+          <button class="btn btn-danger" data-reset="prices">주가 초기화</button>
+        </div>
+        <div style="background:var(--bg3);border-radius:var(--radius);padding:16px;">
+          <div style="font-weight:700;margin-bottom:6px;">🔄 거래내역 삭제</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">모든 학생의 거래 내역을 삭제합니다.</div>
+          <button class="btn btn-danger" data-reset="history">거래내역 삭제</button>
+        </div>
+        <div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:16px;">
+          <div style="font-weight:700;margin-bottom:6px;color:var(--red);">🚨 전체 초기화</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">모든 데이터를 처음 상태로 초기화합니다.</div>
+          <button class="btn btn-danger" data-reset="all">전체 초기화</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── 탭 내 이벤트 ───────────────────────────────────────
+function attachTabListeners() {
+  // 예금 저장
+  document.querySelectorAll('[data-save-dep]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.saveDep;
+      const val  = parseFloat(document.querySelector(`[data-dep-name="${name}"]`)?.value);
+      if (isNaN(val) || val < 0) return showToast('유효한 금액을 입력하세요', 'error');
+      await update(ref(db, `state/students/${name}`), { deposit: val });
+      showToast(`${name} 예금 → ${fmt(val)}점`, 'success');
+    });
+  });
+  // 예금 추가
+  document.querySelectorAll('[data-add-dep]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.addDep;
+      const add  = parseFloat(document.querySelector(`[data-dep-name="${name}"]`)?.value);
+      if (isNaN(add) || add <= 0) return showToast('추가할 금액을 입력하세요', 'error');
+      const cur  = fbState.students?.[name]?.deposit ?? 0;
+      await update(ref(db, `state/students/${name}`), { deposit: cur + add });
+      showToast(`${name}에게 ${fmt(add)}점 추가!`, 'success');
+    });
+  });
+  // 모둠 점수 저장
+  document.querySelectorAll('[data-save-score]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const gid = parseInt(btn.dataset.saveScore);
+      const val = parseFloat(document.querySelector(`[data-score-gid="${gid}"]`)?.value);
+      if (isNaN(val) || val < 0) return showToast('유효한 점수를 입력하세요', 'error');
+      await update(ref(db, `state/groups/${gid}`), { totalScore: val });
+      showToast(`${GROUPS.find(g=>g.id===gid)?.name} 총점 → ${fmt(val)}점`, 'success');
+    });
+  });
+  // 발행량 저장
+  document.querySelectorAll('[data-save-supply]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key  = btn.dataset.saveSupply;
+      const val  = parseInt(document.querySelector(`[data-supply-key="${key}"]`)?.value);
+      const held = getHeld(key);
+      if (isNaN(val) || val < held) return showToast(`최소 ${held}주 이상이어야 합니다`, 'error');
+      await update(ref(db, 'state/shareSupply'), { [key]: val });
+      showToast(`${key} 발행량 → ${val}주`, 'success');
+    });
+  });
+  // 주가 설정
+  document.querySelectorAll('[data-save-price]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.savePrice;
+      const val = parseFloat(document.querySelector(`[data-price-key="${key}"]`)?.value);
+      if (isNaN(val) || val <= 0) return showToast('유효한 가격을 입력하세요', 'error');
+      await update(ref(db, 'state'), {
+        [`prices/${key}`]:     val,
+        [`prevPrices/${key}`]: fbState.prices?.[key] ?? val,
+      });
+      showToast(`${key} → ${fmtF(val)}점`, 'success');
+    });
+  });
+  // 초기화 버튼
+  document.querySelectorAll('[data-reset]').forEach(btn => {
+    btn.addEventListener('click', () => doReset(btn.dataset.reset));
+  });
+}
+
+async function doReset(type) {
+  const msgs = {
+    deposits: '모든 학생 예금을 1,000점으로 초기화하시겠습니까?',
+    prices:   '모든 주가를 초기값으로 되돌리시겠습니까?',
+    history:  '모든 거래 내역을 삭제하시겠습니까?',
+    all:      '⚠️ 모든 데이터를 완전히 초기화합니다. 정말 진행하시겠습니까?',
+  };
+  if (!confirm(msgs[type])) return;
+
+  const updates = {};
+  if (type === 'deposits' || type === 'all') {
+    ALL_STUDENTS.forEach(s => { updates[`state/students/${s.name}/deposit`] = 1000; });
+  }
+  if (type === 'prices' || type === 'all') {
+    GROUPS.forEach(g => {
+      updates[`state/prices/G${g.id}`]       = 100;
+      updates[`state/prices/G${g.id}_INV`]   = 20;
+      updates[`state/prices/G${g.id}_LEV`]   = 20;
+      updates[`state/prevPrices/G${g.id}`]   = 100;
+      updates[`state/prevPrices/G${g.id}_INV`] = 20;
+      updates[`state/prevPrices/G${g.id}_LEV`] = 20;
+    });
+  }
+  if (type === 'history' || type === 'all') {
+    ALL_STUDENTS.forEach(s => { updates[`state/students/${s.name}/history`] = []; });
+  }
+  if (type === 'all') {
+    GROUPS.forEach(g => {
+      const initQ = Math.floor(60 / g.members.length);
+      g.members.forEach(m => { updates[`state/students/${m}/holdings`] = { [`G${g.id}`]: initQ }; });
+      updates[`state/groups/${g.id}`]         = { totalScore: 1000 };
+      updates[`state/shareSupply/G${g.id}`]   = 60;
+    });
+    updates['state/marketOpen'] = false;
+  }
+
+  await update(ref(db), updates);
+  showToast('초기화 완료', 'info');
+}
+
+// ── 토스트 ────────────────────────────────────────────
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type} show`;
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── 시작 ─────────────────────────────────────────────
+document.getElementById('main-content').innerHTML = renderLogin();
+attachLoginBtn();
+subscribeState();
+</script>
+</body>
+</html>
