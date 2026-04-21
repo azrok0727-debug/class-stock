@@ -218,7 +218,7 @@ canvas.chart-canvas{display:block;width:100%;}
   #tabs-nav .tab.active { background: var(--bg3); }
 
   /* 콘텐츠 영역: 최대 너비 제한 */
-  #tab-content { flex: 1; overflow-y: auto; padding: 20px 28px; max-width: 1100px; }
+  #tab-content { flex: 1; overflow-y: auto; padding: 20px 28px; }
 
   /* 시장 탭: 종목 목록 왼쪽, 거래 패널 오른쪽 */
   .market-grid { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
@@ -257,7 +257,7 @@ canvas.chart-canvas{display:block;width:100%;}
   .pc-main { flex: 1; overflow-y: auto; min-width: 0; }
   #tab-content { padding: 20px 28px; }
   .news-side {
-    width: 260px; flex-shrink: 0;
+    width: 320px; flex-shrink: 0;
     border-left: 1px solid var(--border);
     background: var(--bg2);
     overflow-y: auto;
@@ -361,7 +361,7 @@ function buildDefaultState() {
   });
   const groups = {};
   GROUPS.forEach(g => { groups[g.id] = { totalScore:1000 }; });
-  const prices = {}, prevPrices = {}, shareSupply = {};
+  const prices = {}, prevPrices = {}, shareSupply = {}, dailyClose = {};
   GROUPS.forEach(g => {
     prices[`G${g.id}`]       = 100;
     prices[`G${g.id}_INV`]   = 20;
@@ -369,9 +369,12 @@ function buildDefaultState() {
     prevPrices[`G${g.id}`]   = 100;
     prevPrices[`G${g.id}_INV`] = 20;
     prevPrices[`G${g.id}_LEV`] = 20;
+    dailyClose[`G${g.id}`]   = 100;
+    dailyClose[`G${g.id}_INV`] = 20;
+    dailyClose[`G${g.id}_LEV`] = 20;
     shareSupply[`G${g.id}`]  = 60;
   });
-  return { students, groups, prices, prevPrices, shareSupply, marketOpen:false };
+  return { students, groups, prices, prevPrices, dailyClose, shareSupply, marketOpen:false };
 }
 
 // ── Firebase 실시간 구독 ────────────────────────────────
@@ -428,8 +431,31 @@ function startPriceTick() {
         updates[`state/prevPrices/${k}`] = fbState.prices?.[k] ?? (suf ? 20 : 100);
       });
     });
-    // ── 캔들 데이터 기록 ──────────────────────────────
+    // ── 하루 시작 시 dailyClose/openPrice 업데이트 ─────
     const now = Date.now();
+    const todayStr = new Date(now).toLocaleDateString('ko-KR');
+    const savedDate = fbState.dailyCloseDate;
+    if (savedDate !== todayStr) {
+      // 날짜가 바뀌었으면: 어제 종가 = 현재가 저장, 오늘 시초가도 저장
+      GROUPS.forEach(g => {
+        ['', '_INV', '_LEV'].forEach(suf => {
+          const k = `G${g.id}${suf}`;
+          const curP = fbState.prices?.[k] ?? (suf ? 20 : 100);
+          updates[`state/dailyClose/${k}`]  = curP; // 전날 종가
+          updates[`state/openPrice/${k}`]   = curP; // 오늘 시초가
+        });
+      });
+      updates['state/dailyCloseDate'] = todayStr;
+    } else if (!fbState.openPrice) {
+      // openPrice가 아직 없으면 현재가를 시초가로 설정
+      GROUPS.forEach(g => {
+        ['', '_INV', '_LEV'].forEach(suf => {
+          const k = `G${g.id}${suf}`;
+          updates[`state/openPrice/${k}`] = fbState.prices?.[k] ?? (suf ? 20 : 100);
+        });
+      });
+    }
+    // ── 캔들 데이터 기록 ──────────────────────────────
     const candleKey = Math.floor(now / 10000); // 10초 단위 키
     GROUPS.forEach(g => {
       ['', '_INV', '_LEV'].forEach(suf => {
@@ -469,7 +495,8 @@ function fmt(n) { return Math.round(n).toLocaleString(); }
 function fmtF(n, d=1) { return Number(n).toFixed(d); }
 function pctChange(ticker) {
   const cur  = fbState?.prices?.[ticker] ?? 0;
-  const prev = fbState?.prevPrices?.[ticker] ?? cur;
+  // dailyClose(전날종가) 있으면 그 기준, 없으면 openPrice(시초가) 기준
+  const prev = fbState?.dailyClose?.[ticker] ?? fbState?.openPrice?.[ticker] ?? cur;
   return prev ? ((cur - prev) / prev * 100) : 0;
 }
 function getAvailShares(ticker) {
@@ -689,7 +716,7 @@ function renderChartPanel(ticker) {
     <div class="chart-side-header">
       <div class="chart-side-name" style="color:${stock.color}">${stock.name}</div>
       <div class="chart-side-price" style="color:${up?'var(--red)':dn?'var(--blue)':'var(--text)'}">${fmtF(price)}점</div>
-      <div class="chart-side-change ${up?'up':dn?'down':'flat'}">${up?'▲':dn?'▼':'—'} ${Math.abs(pct).toFixed(2)}%</div>
+      <div class="chart-side-change ${up?'up':dn?'down':'flat'}">어제보다 ${up?'+':'-'}${Math.abs(pct).toFixed(2)}%</div>
     </div>
     <div class="chart-period-tabs">
       <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','pc')">10분</button>
@@ -761,7 +788,7 @@ function openChartModal(ticker) {
       <button class="chart-modal-back" onclick="closeChartModal()">← 뒤로</button>
       <div class="chart-modal-name" style="color:${stock?.color}">${stock?.name}</div>
       <div class="chart-modal-price" style="color:${up?'var(--red)':dn?'var(--blue)':'var(--text)'}">${fmtF(price)}점</div>
-      <div class="chart-modal-change ${up?'up':dn?'down':'flat'}">${up?'▲':dn?'▼':'—'} ${Math.abs(pct).toFixed(2)}%</div>
+      <div class="chart-modal-change ${up?'up':dn?'down':'flat'}">어제보다 ${up?'+':'-'}${Math.abs(pct).toFixed(2)}%</div>
     </div>
     <div class="chart-body" id="modal-chart-panel">
       ${renderChartModalInner(ticker)}
@@ -1023,8 +1050,8 @@ function renderMarket() {
           <div class="s-name">${s.desc||''}</div>
         </div>
         <div class="s-price-col">
-          <div class="s-price" style="color:${s.color}">${fmtF(price)}점</div>
-          <div class="s-change ${up?'up':dn?'down':'flat'}">${up?'▲':dn?'▼':'—'} ${Math.abs(pct).toFixed(2)}%</div>
+          <div class="s-price" style="color:${pct>0?'var(--red)':pct<0?'var(--blue)':'var(--text)'}">${fmtF(price)}점</div>
+          <div class="s-change ${up?'up':dn?'down':'flat'}">${up?'▲':dn?'▼':'—'} ${Math.abs(pct).toFixed(2)}% <span style="font-size:10px;opacity:0.65;">어제보다</span></div>
         </div>
         ${s.type==='base' ? `<div class="s-vol">${avail}주<br><span style="font-size:10px">잔여</span></div>` : '<div style="width:36px"></div>'}
       </div>`;
@@ -1070,7 +1097,7 @@ function renderTradePanel() {
         <button class="trade-tab buy${isBuy?' active':''}" data-tt="buy">살게요</button>
         <button class="trade-tab sell${!isBuy?' active':''}" data-tt="sell">팔게요</button>
       </div>
-      <div class="trade-row"><label>현재가</label><span style="font-size:15px;font-weight:700;color:${stock.color}">${fmtF(price)}점</span></div>
+      <div class="trade-row"><label>현재가</label><span style="font-size:15px;font-weight:700;color:${(()=>{const p=pctChange(selectedStock);return p>0?'var(--red)':p<0?'var(--blue)':'var(--text)'})()}">${fmtF(price)}점</span></div>
       <div class="trade-row">
         <label>수량</label>
         <input type="number" id="trade-qty" min="1" max="${isBuy?maxB:maxS}" value="1" />
