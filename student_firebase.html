@@ -1283,46 +1283,47 @@ window.sendDiscussMsg = async function(ticker) {
 
 function renderDiscuss(ticker) {
   const msgObj = fbState.discuss?.[ticker] ?? {};
-  const msgs = Object.values(msgObj).filter(Boolean).sort((a,b)=>a.ts-b.ts);
-  const stock = getStocks().find(s=>s.ticker===ticker);
-  const stockName = stock?.name || ticker;
+  const msgs = Object.values(msgObj).filter(Boolean).sort((a,b) => a.ts - b.ts);
+  const stock = getStocks().find(s => s.ticker === ticker);
+  const stockName = stock ? stock.name : ticker;
 
   let msgHtml = '';
   if (msgs.length === 0) {
-    msgHtml = '<div class="discuss-empty">💬 아직 메시지가 없어요!<br><span style="font-size:12px;">첫 번째로 의견을 남겨보세요 😊</span></div>';
+    msgHtml = '<div class="discuss-empty">💬 아직 메시지가 없어요<br><span style="font-size:11px;">첫 번째 의견을 남겨보세요! 😊</span></div>';
   } else {
-    msgs.forEach(m => {
-      const isMe = m.author === currentUser;
-      const initial = m.author ? m.author.slice(0,1) : '?';
-      const avatarHtml = isMe ? '' : '<div class="discuss-avatar">' + initial + '</div>';
-      const nameHtml = isMe ? '' : '<div class="discuss-name">' + m.author + '</div>';
-      msgHtml +=
-        '<div class="discuss-msg' + (isMe ? ' mine' : '') + '">' +
-          avatarHtml +
-          '<div style="max-width:75%;">' + nameHtml +
-            '<div class="discuss-bubble' + (isMe ? ' mine' : '') + '">' +
-              '<div class="discuss-text">' + m.text + '</div>' +
-              '<div class="discuss-time">' + m.date + '</div>' +
-            '</div>' +
+    msgs.forEach(function(m) {
+      var isMe = (m.author === currentUser);
+      var initial = (m.author && m.author.length > 0) ? m.author.slice(0, 1) : '?';
+      var avatarHtml = isMe ? '' : '<div class="discuss-avatar">' + initial + '</div>';
+      var nameHtml = isMe ? '' : '<div class="discuss-name">' + m.author + '</div>';
+      var bubbleClass = 'discuss-bubble' + (isMe ? ' mine' : '');
+      var msgClass = 'discuss-msg' + (isMe ? ' mine' : '');
+      msgHtml += '<div class="' + msgClass + '">' +
+        avatarHtml +
+        '<div class="discuss-content">' +
+          nameHtml +
+          '<div class="' + bubbleClass + '">' +
+            '<div class="discuss-text">' + m.text + '</div>' +
+            '<div class="discuss-time">' + m.date + '</div>' +
           '</div>' +
-        '</div>';
+        '</div>' +
+      '</div>';
     });
   }
 
-  return (
+  return '<div class="discuss-section">' +
     '<div class="discuss-header">' +
       '<div class="discuss-header-title">💬 ' + stockName + ' 토론방</div>' +
-      '<div class="discuss-header-count">' + msgs.length + '개의 글</div>' +
+      '<div class="discuss-header-count">' + msgs.length + '개</div>' +
     '</div>' +
-    '<div class="discuss-wrap" id="discuss-scroll" style="min-height:180px;max-height:320px;overflow-y:auto;">' +
+    '<div class="discuss-msgs" id="discuss-scroll">' +
       msgHtml +
-      '<div style="height:4px;"></div>' +
     '</div>' +
-    '<div style="display:flex;gap:8px;margin-top:12px;align-items:center;">' +
-      '<input class="discuss-input" id="discuss-input" placeholder="' + stockName + '에 대해 자유롭게 의견을 남겨보세요!" maxlength="100" />' +
-      '<button class="discuss-send" id="discuss-send-btn">전송</button>' +
-    '</div>'
-  );
+    '<div class="discuss-input-area">' +
+      '<input class="discuss-input-field" id="discuss-input" placeholder="의견을 남겨보세요..." maxlength="100" />' +
+      '<button class="discuss-send-btn" id="discuss-send-btn">전송</button>' +
+    '</div>' +
+  '</div>';
 }
 
 function renderChartModalInner(ticker) {
@@ -1488,7 +1489,7 @@ window.sendAiMsg = async function() {
   ];
 
   try {
-    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY;
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY;
     console.log('Calling Gemini API...');
     const res = await fetch(endpoint, {
       method: 'POST',
