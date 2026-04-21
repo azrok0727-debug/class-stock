@@ -2134,7 +2134,34 @@ function renderNews() {
     </div>
   `).join('')}</div>`;
 }
+// ... (기존 코드 2136줄 부근)
+subscribeState();
 
+// ── 차트 클릭 이벤트 리스너 추가 ──
+// 화면이 클릭될 때, 클릭된 대상이 종목 행(.stock-row)인지 확인하고 차트를 띄웁니다.
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('.stock-row');
+  if (row) {
+    const ticker = row.querySelector('.s-ticker').textContent.trim();
+    const name = row.querySelector('.s-name').textContent.trim();
+    
+    // 1. 모바일용 모달 띄우기
+    const modal = document.querySelector('.chart-modal');
+    if(modal) {
+      modal.style.display = 'flex';
+      document.querySelector('.chart-modal-name').textContent = name;
+    }
+    
+    // 2. PC용 사이드바 이름 변경
+    const sideName = document.querySelector('.chart-side-name');
+    if(sideName) sideName.textContent = name;
+
+    // 3. 차트 업데이트 함수 호출 (이미 작성되어 있는 경우)
+    if (typeof updateChart === 'function') {
+      updateChart(ticker);
+    }
+  }
+});
 // ── 시작 ─────────────────────────────────────────────
 await ensureInitialized();
 subscribeState();
