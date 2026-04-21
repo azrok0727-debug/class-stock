@@ -31,8 +31,8 @@
   --radius:8px;--radius-lg:12px;
 }
 body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif;min-height:100vh;}
-.app{max-width:760px;margin:0 auto;padding:0 16px 80px;}
-.header{padding:20px 0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.app{max-width:760px;margin:0 auto;padding:0 0 80px;}
+.header{padding:20px 16px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:50;}
 .header-left h1{font-size:17px;font-weight:700;}
 .header-left p{font-size:12px;color:var(--text2);margin-top:2px;}
 .market-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;}
@@ -46,7 +46,7 @@ body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif
 .login-card select:focus{border-color:var(--blue);}
 .btn-primary{width:100%;padding:11px;font-size:14px;font-weight:700;background:var(--blue);border:none;border-radius:var(--radius);color:#0d1117;cursor:pointer;font-family:'SeoulNamsan',sans-serif;transition:opacity 0.15s;}
 .btn-primary:hover{opacity:0.85;}
-.tabs{display:flex;gap:2px;padding:12px 0;overflow-x:auto;scrollbar-width:none;position:sticky;top:0;background:var(--bg);z-index:10;border-bottom:1px solid var(--border);}
+.tabs{display:flex;gap:2px;padding:12px 0;overflow-x:auto;scrollbar-width:none;position:sticky;top:0;background:var(--bg);z-index:48;border-bottom:1px solid var(--border);}
 .tabs::-webkit-scrollbar{display:none;}
 .tab{padding:7px 14px;font-size:13px;font-weight:500;border-radius:var(--radius);border:none;background:transparent;cursor:pointer;color:var(--text2);font-family:'SeoulNamsan',sans-serif;white-space:nowrap;transition:all 0.15s;}
 .tab.active{background:var(--bg3);color:var(--text);}
@@ -86,12 +86,13 @@ canvas.chart-canvas{display:block;width:100%;}
 .chart-period-tabs{display:flex;gap:4px;margin-bottom:10px;}
 .chart-period-tab{padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid var(--border2);background:transparent;cursor:pointer;color:var(--text2);font-family:inherit;}
 .chart-period-tab.active{background:var(--bg3);color:var(--text);}
-.marquee-wrap{overflow:hidden;background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 0;white-space:nowrap;}
+.marquee-wrap{overflow:hidden;background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 0;white-space:nowrap;position:sticky;top:0;z-index:49;}
 .marquee-inner{display:inline-block;animation:marquee-scroll 30s linear infinite;}
 .marquee-inner:hover{animation-play-state:paused;}
 @keyframes marquee-scroll{0%{transform:translateX(100vw);}100%{transform:translateX(-100%);}}
 .marquee-item{display:inline-block;color:#ff00cc;font-size:13px;font-weight:500;margin-right:80px;}
 .section-title:first-child{margin-top:0;}
+.tab-content-inner{padding:0 16px;}
 .stock-row{display:flex;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;}
 .stock-row:hover{border-color:var(--border2);}
 .stock-row.selected{border-color:var(--blue);background:var(--blue-bg);}
@@ -198,6 +199,8 @@ canvas.chart-canvas{display:block;width:100%;}
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     display: flex; align-items: center;
   }
+  /* PC에서 탭은 사이드바로 변환되므로 sticky 불필요 */
+  .tabs { position: static !important; }
   .header-logo { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; margin-right: 10px; }
   .header-left h1 { font-size: 15px; }
   .header-left p { font-size: 11px; }
