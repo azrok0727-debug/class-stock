@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>가나디증권</title>
 <link rel="manifest" href="./manifest-student.json">
 <meta name="mobile-web-app-capable" content="yes">
@@ -331,6 +331,7 @@ const GROUPS = [
   { id:6, name:'6모둠', members:['김준우','민나진','윤지환','이수빈','권용민'] },
 ];
 const ALL_STUDENTS = GROUPS.flatMap(g => g.members.map(m => ({ name:m, group:g.id })));
+const TEACHER_ACCOUNT = { name:'김민재 선생님', group:0, password:'teacher2024' };
 const GROUP_COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#ff7b72','#d2a679'];
 
 // ── 앱 상태 ────────────────────────────────────────────
@@ -556,7 +557,14 @@ function renderLogin() {
             <optgroup label="${g.name}">
               ${g.members.map(m => `<option value="${m}">${m}</option>`).join('')}
             </optgroup>`).join('')}
+          <optgroup label="관리자">
+            <option value="김민재 선생님">김민재 선생님</option>
+          </optgroup>
         </select>
+        <div id="teacher-pw-wrap" style="display:none;margin-bottom:12px;">
+          <input type="password" id="teacher-pw-input" placeholder="비밀번호 입력"
+            style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;outline:none;" />
+        </div>
         <button class="btn-primary" id="login-btn">입장하기</button>
       </div>
     </div>`;
@@ -838,7 +846,7 @@ function renderTradePanelContent(ticker) {
       <div class="row"><span>${isBuy?'구매':'판매'} 금액</span><span id="modal-trade-total">${fmtF(price)}점</span></div>
     </div>
     <button class="btn-trade ${isBuy?'buy':'sell'}" onclick="executeModalTrade('${ticker}')">
-      ${isBuy?'매수하기':'매도하기'}
+      ${isBuy?'주식 구매하기':'주식 판매하기'}
     </button>
   `;
 }
@@ -908,17 +916,32 @@ window.executeModalTrade = async function executeModalTrade(ticker) {
 // PC 차트 자동 갱신 (Firebase 업데이트 시 호출)
 function refreshPcChart() {
   if (selectedStock && window.innerWidth >= 900) {
+    // 수량 입력 중이면 차트 캔버스만 다시 그리고 HTML은 재렌더 안 함
+    const qtyFocused = document.activeElement?.id === 'trade-qty';
     const panel = document.getElementById('pc-chart-panel');
     if (panel) {
-      panel.innerHTML = renderChartPanel(selectedStock);
+      if (!qtyFocused) {
+        panel.innerHTML = renderChartPanel(selectedStock);
+      }
       setTimeout(() => drawCandleChart('pc-candle-canvas','pc-vol-canvas', selectedStock, chartPeriod), 30);
     }
   }
-  // 모바일 모달 차트도 갱신
+  // 모바일 모달: 수량 입력 중이면 차트만 다시 그림
   if (chartModalTicker) {
+    const qtyFocused = document.activeElement?.id === 'modal-trade-qty';
     const panel = document.getElementById('modal-chart-panel');
-    if (panel) {
+    if (panel && !qtyFocused) {
+      // 현재 입력값 저장
+      const savedQty = document.getElementById('modal-trade-qty')?.value;
       panel.innerHTML = renderChartModalInner(chartModalTicker);
+      setTimeout(() => {
+        drawCandleChart('modal-candle-canvas','modal-vol-canvas', chartModalTicker, chartPeriod);
+        // 입력값 복원
+        const qtyEl = document.getElementById('modal-trade-qty');
+        if (qtyEl && savedQty) qtyEl.value = savedQty;
+      }, 30);
+    } else if (panel && qtyFocused) {
+      // 입력 중엔 캔버스만 다시 그림
       setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', chartModalTicker, chartPeriod), 30);
     }
   }
@@ -1291,7 +1314,7 @@ function renderHistory() {
     const isBuy = h.type === 'buy';
     return `
       <div class="history-item">
-        <span class="hist-badge ${h.type}">${isBuy?'매수':'매도'}</span>
+        <span class="hist-badge ${h.type}">${isBuy?'구매':'판매'}</span>
         <div class="hist-main">
           <div class="hist-name">${stock?.name ?? h.ticker}</div>
           <div class="hist-detail">${h.qty}주 × ${fmtF(h.price)}점</div>
