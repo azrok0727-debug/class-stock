@@ -419,14 +419,24 @@ function startPriceTick() {
       const supply  = fbState.shareSupply?.[key] ?? 60;
       const cur     = fbState.prices?.[key] ?? 100;
       const fundamental = score / supply;
-      const noise   = (Math.random() - 0.485) * 0.06;
-      const drift   = (fundamental - cur) * 0.15;
-      const newBase = Math.max(1, Math.round((cur + drift + cur * noise) * 10) / 10);
+
+      // ── 수요/공급 압력 계산 ──────────────────────────
+      // 직전 10초간 매수/매도 압력 읽기 (tickPressure)
+      const pressure = fbState.tickPressure?.[key] ?? 0; // 양수=매수압력, 음수=매도압력
+      // 압력을 가격 변동으로 변환 (최대 ±5%)
+      const pressureEffect = Math.max(-0.05, Math.min(0.05, pressure * 0.01));
+
+      const noise   = (Math.random() - 0.485) * 0.04; // 노이즈 약간 줄임
+      const drift   = (fundamental - cur) * 0.15;     // 기본가로 회귀
+      const newBase = Math.max(1, Math.round((cur + drift + cur * noise + cur * pressureEffect) * 10) / 10);
       const basePct = (newBase - cur) / cur;
 
       updates[`state/prices/${key}`]     = newBase;
       updates[`state/prices/${key}_INV`] = Math.max(1, Math.round((fbState.prices[`${key}_INV`] ?? 20) * (1 - basePct) * 10) / 10);
       updates[`state/prices/${key}_LEV`] = Math.max(1, Math.round((fbState.prices[`${key}_LEV`] ?? 20) * (1 + basePct * 2) * 10) / 10);
+
+      // 압력 소멸: 틱 후 압력을 0으로 리셋
+      updates[`state/tickPressure/${key}`] = 0;
     });
     // 이전 가격 저장
     GROUPS.forEach(g => {
@@ -906,6 +916,14 @@ window.executeModalTrade = async function executeModalTrade(ticker) {
       cur.history.push({ type:isBuy?'buy':'sell', ticker, qty, price, total, date:new Date().toLocaleString('ko-KR') });
       return cur;
     });
+    // ── 수요/공급 압력 누적 ──────────────────────────
+    if (!ticker.includes('_INV') && !ticker.includes('_LEV')) {
+      const pressureDelta = isBuy ? qty : -qty;
+      const curPressure = fbState.tickPressure?.[ticker] ?? 0;
+      await update(ref(db, 'state/tickPressure'), {
+        [ticker]: curPressure + pressureDelta
+      });
+    }
     showToast(`${isBuy?'구매':'판매'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
     // 모달 내 거래 영역만 갱신
     const panel = document.getElementById('modal-chart-panel');
@@ -1267,6 +1285,17 @@ async function executeTrade() {
       return current;
     });
 
+    // ── 수요/공급 압력 누적 ──────────────────────────
+    // 기본 주식(G1~G6)만 압력 반영 (인버스/레버리지는 파생상품이므로 제외)
+    const baseTicker = selectedStock.replace('_INV','').replace('_LEV','');
+    if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV')) {
+      // 매수: 양수 압력, 매도: 음수 압력 (수량에 비례)
+      const pressureDelta = isBuy ? qty : -qty;
+      const curPressure = fbState.tickPressure?.[selectedStock] ?? 0;
+      await update(ref(db, 'state/tickPressure'), {
+        [selectedStock]: curPressure + pressureDelta
+      });
+    }
     showToast(`${isBuy ? '구매' : '판매'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
     selectedStock = null;
     renderCurrentTab();
