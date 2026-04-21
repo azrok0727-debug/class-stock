@@ -1233,17 +1233,20 @@ function renderDiscuss(ticker) {
     });
   }
 
-  return (
+  const escapedTicker = ticker;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = (
     '<div class="discuss-wrap" id="discuss-scroll">' +
       msgHtml +
       '<div style="height:70px;"></div>' +
     '</div>' +
     '<div class="discuss-input-row">' +
-      '<input class="discuss-input" id="discuss-input" placeholder="' + stockName + ' 토론방에 글 남기기..." maxlength="100" ' +
-        'onkeydown="if(event.key==='Enter')sendDiscussMsg('' + ticker + '')" />' +
-      '<button class="discuss-send" onclick="sendDiscussMsg('' + ticker + '')">전송</button>' +
+      '<input class="discuss-input" id="discuss-input" placeholder="' + stockName + ' 토론방에 글 남기기..." maxlength="100" />' +
+      '<button class="discuss-send" id="discuss-send-btn">전송</button>' +
     '</div>'
   );
+  // Enter 키 이벤트는 attachTabListeners에서 처리
+  return wrap.innerHTML;
 }
 
 function renderChartModalInner(ticker) {
