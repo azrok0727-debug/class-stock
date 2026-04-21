@@ -257,7 +257,7 @@ canvas.chart-canvas{display:block;width:100%;}
   .pc-main { flex: 1; overflow-y: auto; min-width: 0; }
   #tab-content { padding: 20px 28px; }
   .news-side {
-    width: 320px; flex-shrink: 0;
+    width: 380px; flex-shrink: 0;
     border-left: 1px solid var(--border);
     background: var(--bg2);
     overflow-y: auto;
@@ -1038,9 +1038,34 @@ function renderCurrentTab() {
 }
 
 function attachLoginBtn() {
-  document.getElementById('login-btn')?.addEventListener('click', () => {
-    const name = document.getElementById('login-select')?.value;
+  const sel = document.getElementById('login-select');
+  const btn = document.getElementById('login-btn');
+
+  // 선생님 선택 시 비밀번호 입력창 표시/숨김
+  sel?.addEventListener('change', () => {
+    const pwWrap = document.getElementById('teacher-pw-wrap');
+    if (pwWrap) pwWrap.style.display = sel.value === TEACHER_ACCOUNT.name ? 'block' : 'none';
+  });
+
+  btn?.addEventListener('click', () => {
+    const name = sel?.value;
     if (!name) { showToast('이름을 선택해주세요', 'error'); return; }
+
+    // 선생님 계정 비밀번호 확인
+    if (name === TEACHER_ACCOUNT.name) {
+      const pw = document.getElementById('teacher-pw-input')?.value;
+      if (!pw) { showToast('비밀번호를 입력해주세요', 'error'); return; }
+      if (pw !== TEACHER_ACCOUNT.password) { showToast('비밀번호가 틀렸습니다', 'error'); return; }
+      currentUser = name;
+      if (!fbState.students?.[name]) {
+        update(ref(db, `state/students/${name}`), { deposit:1000, holdings:{}, history:[], group:0 });
+      }
+      document.getElementById('user-label').textContent = `${name} (관리자)`;
+      startPriceTick();
+      renderMain();
+      return;
+    }
+
     currentUser = name;
     const gName = GROUPS.find(g => g.id === fbState?.students?.[name]?.group)?.name ?? '';
     document.getElementById('user-label').textContent = `${name} (${gName})`;
