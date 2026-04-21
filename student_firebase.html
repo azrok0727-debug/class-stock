@@ -417,6 +417,9 @@ canvas.chart-canvas{display:block;width:100%;}
 
 
 .tab-content-inner{padding:0 16px;}
+.pc-layout{display:block;}
+.pc-main{display:block;}
+.news-side{display:none;}
 .stock-row{display:flex;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;min-width:0;overflow:hidden;}
 .stock-row:hover{border-color:var(--border2);}
 .stock-row.selected{border-color:var(--blue);background:var(--blue-bg);}
@@ -531,6 +534,8 @@ canvas.chart-canvas{display:block;width:100%;}
 
   /* 사이드바 + 본문 */
   #main-content { margin-top: 56px; display: flex; height: calc(100vh - 56px); overflow: hidden; }
+  .pc-layout { display: flex !important; height: 100%; }
+  .news-side { display: block !important; }
 
   /* 사이드바 */
   #tabs-nav {
@@ -697,7 +702,7 @@ canvas.chart-canvas{display:block;width:100%;}
     </div>
   </div>
   <div id="notice-bar" style="display:none;"></div>
-  <div id="main-content" style="display:flex;align-items:center;justify-content:center;">
+  <div id="main-content">
     <div class="loading-screen"><div class="spinner"></div><span>Firebase 연결 중...</span></div>
   </div>
 </div>
