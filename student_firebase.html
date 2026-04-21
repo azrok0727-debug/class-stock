@@ -417,23 +417,23 @@ canvas.chart-canvas{display:block;width:100%;}
 
 
 .tab-content-inner{padding:0 16px;}
-.stock-row{display:flex;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;}
+.stock-row{display:flex;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;min-width:0;overflow:hidden;}
 .stock-row:hover{border-color:var(--border2);}
 .stock-row.selected{border-color:var(--blue);background:var(--blue-bg);}
-.s-info{flex:1;min-width:0;}
-.s-ticker{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;font-family:'Space Grotesk',sans-serif;}
-.s-name{font-size:11px;color:var(--text2);margin-top:2px;}
+.s-info{flex:1;min-width:0;overflow:hidden;}
+.s-ticker{font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px;font-family:'SeoulNamsan',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.s-name{font-size:10px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;}
 .badge-inv{background:var(--red-bg);color:var(--red);}
 .badge-lev{background:var(--purple-bg);color:var(--purple);}
 .badge-base{background:var(--green-bg);color:var(--green);}
-.s-price-col{text-align:right;margin:0 12px;}
-.s-price{font-size:14px;font-weight:700;}
-.s-change{font-size:11px;margin-top:2px;}
+.s-price-col{text-align:right;margin:0 6px;flex-shrink:0;}
+.s-price{font-size:13px;font-weight:700;white-space:nowrap;}
+.s-change{font-size:10px;margin-top:1px;white-space:nowrap;}
 .s-change.up{color:var(--red);}
 .s-change.down{color:var(--blue);}
 .s-change.flat{color:var(--text3);}
-.s-vol{font-size:11px;color:var(--text3);text-align:right;min-width:36px;}
+.s-vol{font-size:10px;color:var(--text3);text-align:right;min-width:30px;flex-shrink:0;white-space:nowrap;}
 .trade-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-top:16px;}
 .trade-panel h3{font-size:15px;font-weight:700;margin-bottom:14px;}
 .trade-tabs{display:flex;gap:6px;margin-bottom:14px;}
@@ -553,7 +553,7 @@ canvas.chart-canvas{display:block;width:100%;}
   .market-right { position: sticky; top: 0; }
 
   /* 종목 목록 2열 그리드 (base, inv, lev 각각) */
-  .stocks-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stocks-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
   .stocks-2col .stock-row { margin-bottom: 0; }
 
   /* 포트폴리오: 3열 카드 그리드 */
