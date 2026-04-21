@@ -92,6 +92,202 @@ canvas.chart-canvas{display:block;width:100%;}
 @keyframes marquee-scroll{0%{transform:translateX(100vw);}100%{transform:translateX(-100%);}}
 .marquee-item{display:inline-block;color:#ff00cc;font-size:13px;font-weight:500;margin-right:80px;}
 .section-title:first-child{margin-top:0;}
+/* ── 스플래시 스크린 ── */
+#splash {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #0d1117;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  overflow: hidden;
+}
+#splash.hide {
+  animation: splashFade 0.6s ease forwards;
+}
+@keyframes splashFade {
+  to { opacity: 0; pointer-events: none; }
+}
+
+/* 배경 캔들들 */
+.splash-candles {
+  position: absolute; inset: 0;
+  display: flex; align-items: flex-end;
+  justify-content: center; gap: 6px;
+  padding: 0 20px 0;
+  opacity: 0;
+  animation: candlesFadeIn 0.5s ease 0.2s forwards;
+}
+@keyframes candlesFadeIn { to { opacity: 0.18; } }
+
+.splash-candle {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 0;
+}
+.candle-wick {
+  width: 2px;
+  border-radius: 1px;
+  animation: wickGrow 0.4s ease forwards;
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+.candle-body {
+  width: 18px;
+  border-radius: 2px;
+  animation: bodyGrow 0.4s ease forwards;
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+@keyframes wickGrow { to { transform: scaleY(1); } }
+@keyframes bodyGrow { to { transform: scaleY(1); } }
+
+/* 로고 영역 */
+.splash-logo-wrap {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 0;
+}
+.splash-icon {
+  width: 88px; height: 88px;
+  border-radius: 22px;
+  object-fit: cover;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  opacity: 0;
+  transform: scale(0.7);
+  animation: iconPop 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.3s forwards;
+}
+@keyframes iconPop {
+  to { opacity: 1; transform: scale(1); }
+}
+.splash-title {
+  font-family: 'SeoulNamsan', sans-serif;
+  font-size: 28px; font-weight: 700;
+  color: #e6edf3;
+  margin-top: 18px;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: titleRise 0.5s ease 0.7s forwards;
+}
+@keyframes titleRise {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 숫자 티커 */
+.splash-tickers {
+  display: flex; gap: 16px;
+  margin-top: 20px;
+  opacity: 0;
+  animation: tickerFade 0.4s ease 1.1s forwards;
+}
+@keyframes tickerFade { to { opacity: 1; } }
+.splash-tick {
+  font-family: 'SeoulNamsan', sans-serif;
+  font-size: 12px; font-weight: 600;
+}
+.splash-tick.up { color: #f85149; }
+.splash-tick.dn { color: #58a6ff; }
+
+/* 숫자 카운트업 */
+.splash-tick span {
+  display: inline-block;
+  animation: numFlicker 0.08s steps(1) infinite;
+}
+@keyframes numFlicker {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 로딩 바 */
+.splash-bar-wrap {
+  width: 140px; height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  margin-top: 28px;
+  opacity: 0;
+  animation: barFadeIn 0.3s ease 1.3s forwards;
+  overflow: hidden;
+}
+@keyframes barFadeIn { to { opacity: 1; } }
+.splash-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #f85149, #58a6ff);
+  border-radius: 2px;
+  width: 0%;
+  animation: barLoad 2.5s ease 1.3s forwards;
+}
+@keyframes barLoad { to { width: 100%; } }
+
+.splash-sub {
+  font-family: 'SeoulNamsan', sans-serif;
+  font-size: 11px; color: #656d76;
+  margin-top: 10px;
+  opacity: 0;
+  animation: titleRise 0.4s ease 1.4s forwards;
+  letter-spacing: 0.5px;
+}
+/* ── PC 스플래시 추가 스타일 ── */
+@media (min-width: 900px) {
+  #splash { flex-direction: row; }
+
+  /* PC: 왼쪽 패널 - 로고+텍스트 */
+  .splash-logo-wrap {
+    flex: 0 0 420px;
+    align-items: flex-start;
+    padding: 0 60px;
+    z-index: 1;
+  }
+  .splash-icon { width: 100px; height: 100px; border-radius: 24px; }
+  .splash-title { font-size: 40px; margin-top: 22px; }
+  .splash-tickers { flex-direction: column; gap: 10px; margin-top: 24px; }
+  .splash-tick { font-size: 14px; }
+  .splash-bar-wrap { width: 200px; margin-top: 32px; height: 4px; }
+  .splash-sub { font-size: 13px; margin-top: 12px; }
+
+  /* PC: 오른쪽 패널 - 큰 차트 */
+  .splash-candles {
+    position: relative;
+    flex: 1;
+    height: 100%;
+    padding: 60px 40px 60px 0;
+    opacity: 0;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 8px;
+    animation: candlesFadeIn 0.5s ease 0.2s forwards;
+    border-left: 1px solid rgba(255,255,255,0.05);
+    margin-left: 0;
+  }
+  .candle-body { width: 28px; border-radius: 3px; }
+  .candle-wick { width: 3px; border-radius: 1px; }
+
+  /* PC: 왼쪽에 세로 구분선 효과 */
+  .splash-logo-wrap::after {
+    display: none;
+  }
+
+  /* PC: 배경 그리드 라인 */
+  .splash-grid {
+    display: block;
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    flex: 1;
+    pointer-events: none;
+  }
+
+  /* PC: 주가 라벨들 */
+  .splash-price-labels {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    padding: 60px 16px;
+    font-family: 'SeoulNamsan', sans-serif;
+    font-size: 11px;
+    color: rgba(255,255,255,0.2);
+    flex-shrink: 0;
+    opacity: 0;
+    animation: candlesFadeIn 0.5s ease 0.4s forwards;
+  }
+}
+
+
 .tab-content-inner{padding:0 16px;}
 .stock-row{display:flex;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;}
 .stock-row:hover{border-color:var(--border2);}
@@ -283,6 +479,83 @@ canvas.chart-canvas{display:block;width:100%;}
 </style>
 </head>
 <body>
+<div id="splash">
+  <div class="splash-candles"><div class="splash-candle" style="height:55px;">
+      <div class="candle-wick" style="height:17px;background:#f85149;animation-delay:0.1s;"></div>
+      <div class="candle-body" style="height:28px;background:#f85149;animation-delay:0.2s;"></div>
+    </div><div class="splash-candle" style="height:40px;">
+      <div class="candle-wick" style="height:12px;background:#58a6ff;animation-delay:0.15000000000000002s;"></div>
+      <div class="candle-body" style="height:18px;background:#58a6ff;animation-delay:0.25s;"></div>
+    </div><div class="splash-candle" style="height:65px;">
+      <div class="candle-wick" style="height:20px;background:#f85149;animation-delay:0.2s;"></div>
+      <div class="candle-body" style="height:35px;background:#f85149;animation-delay:0.30000000000000004s;"></div>
+    </div><div class="splash-candle" style="height:35px;">
+      <div class="candle-wick" style="height:10px;background:#58a6ff;animation-delay:0.25s;"></div>
+      <div class="candle-body" style="height:15px;background:#58a6ff;animation-delay:0.35s;"></div>
+    </div><div class="splash-candle" style="height:70px;">
+      <div class="candle-wick" style="height:22px;background:#f85149;animation-delay:0.30000000000000004s;"></div>
+      <div class="candle-body" style="height:38px;background:#f85149;animation-delay:0.4s;"></div>
+    </div><div class="splash-candle" style="height:50px;">
+      <div class="candle-wick" style="height:15px;background:#f85149;animation-delay:0.35s;"></div>
+      <div class="candle-body" style="height:25px;background:#f85149;animation-delay:0.44999999999999996s;"></div>
+    </div><div class="splash-candle" style="height:30px;">
+      <div class="candle-wick" style="height:8px;background:#58a6ff;animation-delay:0.4s;"></div>
+      <div class="candle-body" style="height:12px;background:#58a6ff;animation-delay:0.5s;"></div>
+    </div><div class="splash-candle" style="height:60px;">
+      <div class="candle-wick" style="height:18px;background:#f85149;animation-delay:0.45000000000000007s;"></div>
+      <div class="candle-body" style="height:32px;background:#f85149;animation-delay:0.55s;"></div>
+    </div><div class="splash-candle" style="height:45px;">
+      <div class="candle-wick" style="height:13px;background:#58a6ff;animation-delay:0.5s;"></div>
+      <div class="candle-body" style="height:22px;background:#58a6ff;animation-delay:0.6s;"></div>
+    </div><div class="splash-candle" style="height:75px;">
+      <div class="candle-wick" style="height:23px;background:#f85149;animation-delay:0.55s;"></div>
+      <div class="candle-body" style="height:42px;background:#f85149;animation-delay:0.65s;"></div>
+    </div><div class="splash-candle" style="height:38px;">
+      <div class="candle-wick" style="height:11px;background:#58a6ff;animation-delay:0.6s;"></div>
+      <div class="candle-body" style="height:17px;background:#58a6ff;animation-delay:0.7s;"></div>
+    </div><div class="splash-candle" style="height:58px;">
+      <div class="candle-wick" style="height:18px;background:#f85149;animation-delay:0.65s;"></div>
+      <div class="candle-body" style="height:30px;background:#f85149;animation-delay:0.75s;"></div>
+    </div><div class="splash-candle" style="height:48px;">
+      <div class="candle-wick" style="height:14px;background:#f85149;animation-delay:0.7000000000000001s;"></div>
+      <div class="candle-body" style="height:24px;background:#f85149;animation-delay:0.8s;"></div>
+    </div><div class="splash-candle" style="height:32px;">
+      <div class="candle-wick" style="height:8px;background:#58a6ff;animation-delay:0.75s;"></div>
+      <div class="candle-body" style="height:14px;background:#58a6ff;animation-delay:0.85s;"></div>
+    </div><div class="splash-candle" style="height:68px;">
+      <div class="candle-wick" style="height:21px;background:#f85149;animation-delay:0.8s;"></div>
+      <div class="candle-body" style="height:37px;background:#f85149;animation-delay:0.9s;"></div>
+    </div><div class="splash-candle" style="height:42px;">
+      <div class="candle-wick" style="height:12px;background:#58a6ff;animation-delay:0.85s;"></div>
+      <div class="candle-body" style="height:20px;background:#58a6ff;animation-delay:0.95s;"></div>
+    </div><div class="splash-candle" style="height:62px;">
+      <div class="candle-wick" style="height:19px;background:#f85149;animation-delay:0.9s;"></div>
+      <div class="candle-body" style="height:33px;background:#f85149;animation-delay:1.0s;"></div>
+    </div><div class="splash-candle" style="height:52px;">
+      <div class="candle-wick" style="height:16px;background:#58a6ff;animation-delay:0.9500000000000001s;"></div>
+      <div class="candle-body" style="height:26px;background:#58a6ff;animation-delay:1.05s;"></div>
+    </div><div class="splash-candle" style="height:28px;">
+      <div class="candle-wick" style="height:7px;background:#f85149;animation-delay:1.0s;"></div>
+      <div class="candle-body" style="height:11px;background:#f85149;animation-delay:1.1s;"></div>
+    </div><div class="splash-candle" style="height:72px;">
+      <div class="candle-wick" style="height:22px;background:#f85149;animation-delay:1.05s;"></div>
+      <div class="candle-body" style="height:40px;background:#f85149;animation-delay:1.1500000000000001s;"></div>
+    </div></div>
+  <div class="splash-logo-wrap">
+    <img src="./icon-192.png" class="splash-icon" alt="가나디증권" />
+    <div class="splash-title">가나디증권</div>
+    <div class="splash-tickers">
+      <span class="splash-tick up">▲ 1모둠 <span id="sp1">16.2</span>점</span>
+      <span class="splash-tick dn">▼ 3모둠 <span id="sp3">14.8</span>점</span>
+      <span class="splash-tick up">▲ 5모둠 <span id="sp5">18.1</span>점</span>
+    </div>
+    <div class="splash-bar-wrap"><div class="splash-bar"></div></div>
+    <div class="splash-sub">우리반 모의 주식투자</div>
+  </div>
+  <div class="splash-price-labels">
+    <span>20</span><span>18</span><span>16</span><span>14</span><span>12</span>
+  </div>
+</div>
 <div class="app">
   <div class="header">
     <div class="header-left" style="display:flex;align-items:center;gap:10px;">
@@ -1501,6 +1774,42 @@ function renderNews() {
 // ── 시작 ─────────────────────────────────────────────
 await ensureInitialized();
 subscribeState();
+
+// ── 스플래시 스크린 ───────────────────────────────────
+(function() {
+  // 숫자 카운트업 애니메이션
+  function animateNum(el, start, end, duration) {
+    if (!el) return;
+    const range = end - start;
+    const step = 50;
+    const steps = duration / step;
+    let cur = start;
+    const timer = setInterval(() => {
+      cur += range / steps + (Math.random() - 0.4) * 0.3;
+      cur = Math.min(Math.max(cur, Math.min(start,end)), Math.max(start,end));
+      el.textContent = Math.abs(cur).toFixed(1);
+      if (Math.abs(cur - end) < 0.1) {
+        el.textContent = end.toFixed(1);
+        clearInterval(timer);
+      }
+    }, step);
+  }
+  setTimeout(() => {
+    animateNum(document.getElementById('sp1'), 14.0, 16.2, 1800);
+    animateNum(document.getElementById('sp3'), 16.5, 14.8, 1800);
+    animateNum(document.getElementById('sp5'), 15.3, 18.1, 1800);
+  }, 1100);
+
+  // 4초 후 스플래시 숨기기
+  setTimeout(() => {
+    const s = document.getElementById('splash');
+    if (s) {
+      s.classList.add('hide');
+      setTimeout(() => s.remove(), 600);
+    }
+  }, 4000);
+})();
+
 </script>
 </body>
 </html>
