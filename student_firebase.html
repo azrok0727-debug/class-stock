@@ -812,8 +812,10 @@ function subscribeState() {
       // 토론방 열려있으면 메시지 갱신
       if (chartModalTicker && chartModalView === 'discuss') {
         const panel = document.getElementById('modal-chart-panel');
-        if (panel && document.activeElement?.id !== 'discuss-input') {
+        const inputFocused = document.activeElement?.id === 'discuss-input';
+        if (panel && !inputFocused) {
           panel.innerHTML = renderChartModalInner(chartModalTicker);
+          setTimeout(() => bindDiscussEvents(chartModalTicker), 30);
         }
       }
     }
@@ -1193,23 +1195,52 @@ window.setModalView = function(view, ticker) {
     panel.innerHTML = renderChartModalInner(ticker);
     if (view === 'chart') {
       setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 30);
+    } else if (view === 'discuss') {
+      // 토론방 이벤트 바인딩
+      setTimeout(() => bindDiscussEvents(ticker), 30);
     }
   }
 };
 
+function bindDiscussEvents(ticker) {
+  const sendBtn = document.getElementById('discuss-send-btn');
+  const input   = document.getElementById('discuss-input');
+  if (sendBtn) {
+    sendBtn.onclick = () => sendDiscussMsg(ticker);
+  }
+  if (input) {
+    input.onkeydown = (e) => { if (e.key === 'Enter') sendDiscussMsg(ticker); };
+    input.focus();
+  }
+  // 스크롤 맨 아래로
+  const scroll = document.getElementById('discuss-scroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+}
+window.bindDiscussEvents = bindDiscussEvents;
+
 window.sendDiscussMsg = async function(ticker) {
   const input = document.getElementById('discuss-input');
   const text = input?.value.trim();
-  if (!text || !currentUser) return;
+  if (!text) { return; }
+  if (!currentUser) { showToast('로그인이 필요합니다', 'error'); return; }
+  const sendBtn = document.getElementById('discuss-send-btn');
+  if (sendBtn) sendBtn.disabled = true;
   const id = 'msg_' + Date.now();
-  const msg = {
-    id, text,
-    author: currentUser,
-    ts: Date.now(),
-    date: new Date().toLocaleString('ko-KR')
-  };
-  await update(ref(db, `state/discuss/${ticker}`), { [id]: msg });
-  input.value = '';
+  const msg = { id, text, author: currentUser, ts: Date.now(), date: new Date().toLocaleString('ko-KR') };
+  try {
+    await update(ref(db, 'state/discuss/' + ticker), { [id]: msg });
+    input.value = '';
+    // 즉시 UI 갱신
+    const panel = document.getElementById('modal-chart-panel');
+    if (panel) {
+      panel.innerHTML = renderChartModalInner(ticker);
+      setTimeout(() => bindDiscussEvents(ticker), 30);
+    }
+  } catch(e) {
+    console.error('discuss send error:', e);
+    showToast('전송 중 오류가 발생했어요', 'error');
+  }
+  if (sendBtn) sendBtn.disabled = false;
 };
 
 function renderDiscuss(ticker) {
@@ -1421,19 +1452,21 @@ window.sendAiMsg = async function() {
   ];
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: apiContents })
-      }
-    );
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + GEMINI_API_KEY;
+    console.log('Calling Gemini API...');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: apiContents })
+    });
+    console.log('API status:', res.status);
     const data = await res.json();
+    console.log('API response:', JSON.stringify(data).slice(0, 200));
     if (data.error) {
       console.error('Gemini API error:', data.error);
-      throw new Error(data.error.message);
+      throw new Error(data.error.message || JSON.stringify(data.error));
     }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '답변을 가져오지 못했어요 😢';
 
     // 생각 중 제거 후 답변 표시
@@ -1441,8 +1474,9 @@ window.sendAiMsg = async function() {
     addAiMessage('ai', reply);
     aiMessages.push({ role: 'model', parts: [{ text: reply }] });
   } catch(e) {
+    console.error('AI Error:', e);
     document.getElementById(thinkingId)?.closest('.ai-msg')?.remove();
-    addAiMessage('ai', '네트워크 오류가 발생했어요. 다시 시도해주세요 😢');
+    addAiMessage('ai', '오류: ' + (e.message || '알 수 없는 오류') + ' 😢\n콘솔(F12)에서 자세한 내용을 확인하세요.');
   }
 
   if (sendBtn) sendBtn.disabled = false;
