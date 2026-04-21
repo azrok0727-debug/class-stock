@@ -72,6 +72,133 @@ body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif
 .chart-modal-name{font-size:18px;font-weight:700;}
 .chart-modal-price{font-size:28px;font-weight:700;margin:2px 0;}
 .chart-modal-change{font-size:14px;}
+/* ── AI 어시스턴트 ── */
+.ai-btn {
+  position: absolute; top: 10px; right: 10px;
+  width: 52px; height: 52px;
+  background: none; border: none; cursor: pointer;
+  padding: 0; z-index: 10;
+}
+.ai-btn img {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  box-shadow: 2px 2px 0 var(--border);
+  background: #fff;
+  object-fit: cover;
+  transition: transform 0.15s;
+}
+.ai-btn:active img { transform: scale(0.92); }
+
+.ai-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 600;
+  display: flex; align-items: flex-end;
+}
+.ai-panel {
+  background: #faf8f3;
+  width: 100%;
+  border-radius: 20px 20px 0 0;
+  border: 2px solid var(--border);
+  border-bottom: none;
+  box-shadow: 0 -4px 0 var(--border);
+  max-height: 75vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.ai-panel-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.ai-panel-header img {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid var(--border);
+  object-fit: cover;
+}
+.ai-panel-title { font-size: 15px; font-weight: 700; flex: 1; }
+.ai-close-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; color: var(--text2); padding: 4px;
+  font-family: inherit;
+}
+.ai-messages {
+  flex: 1; overflow-y: auto;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ai-msg { display: flex; gap: 8px; }
+.ai-msg.user { flex-direction: row-reverse; }
+.ai-msg-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  flex-shrink: 0; overflow: hidden;
+  border: 1.5px solid var(--border);
+}
+.ai-msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ai-msg-avatar.user-av {
+  background: #e8f0fd;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--blue);
+}
+.ai-bubble {
+  background: #fff;
+  border: 2px solid var(--border);
+  border-radius: 12px 12px 12px 2px;
+  padding: 8px 12px;
+  max-width: 78%;
+  font-size: 13px; line-height: 1.6;
+  box-shadow: 2px 2px 0 var(--border);
+}
+.ai-bubble.user {
+  background: #e8f0fd;
+  border-color: var(--blue);
+  border-radius: 12px 12px 2px 12px;
+  box-shadow: 2px 2px 0 var(--blue);
+}
+.ai-bubble.thinking {
+  color: var(--text3);
+  font-style: italic;
+}
+.ai-input-row {
+  display: flex; gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.ai-input {
+  flex: 1; padding: 9px 14px;
+  background: #f5f5f5;
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  font-size: 14px; font-family: inherit;
+  color: var(--text); outline: none;
+}
+.ai-send {
+  padding: 9px 16px;
+  background: #e03030; color: white;
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  box-shadow: 2px 2px 0 var(--border);
+}
+.ai-send:active { transform: translate(2px,2px); box-shadow: none; }
+.ai-send:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-quick-btns {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 16px 10px;
+}
+.ai-quick-btn {
+  padding: 5px 12px; font-size: 12px; font-weight: 600;
+  background: #fff; border: 2px solid var(--border);
+  border-radius: 20px; cursor: pointer; font-family: inherit;
+  box-shadow: 1px 1px 0 var(--border);
+  color: var(--text);
+}
+.ai-quick-btn:active { transform: translate(1px,1px); box-shadow: none; }
+
 .chart-body{flex:1;overflow-y:auto;padding:12px 16px 100px;}
 .chart-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;}
 canvas.chart-canvas{display:block;width:100%;}
@@ -379,7 +506,7 @@ canvas.chart-canvas{display:block;width:100%;}
 .empty{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px;}
 .empty-icon{font-size:32px;margin-bottom:12px;}
 .closed-banner{background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--red);font-weight:600;text-align:center;}
-.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;color:var(--text2);}
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;color:var(--text2);width:100%;}
 .spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .section-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;margin-top:20px;}
@@ -570,7 +697,7 @@ canvas.chart-canvas{display:block;width:100%;}
     </div>
   </div>
   <div id="notice-bar" style="display:none;"></div>
-  <div id="main-content">
+  <div id="main-content" style="display:flex;align-items:center;justify-content:center;">
     <div class="loading-screen"><div class="spinner"></div><span>Firebase 연결 중...</span></div>
   </div>
 </div>
@@ -1115,14 +1242,12 @@ function renderChartModalInner(ticker) {
   const pct    = pctChange(ticker);
   const up = pct > 0, dn = pct < 0;
   const isChart = chartModalView !== 'discuss';
-  return `
-    <div style="display:flex;gap:6px;margin-bottom:12px;">
-      <button onclick="setModalView('chart','${ticker}')"
-        style="flex:1;padding:8px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid var(--border);background:${isChart?'#fff':'transparent'};box-shadow:${isChart?'2px 2px 0 var(--border)':'none'};cursor:pointer;font-family:inherit;color:var(--text);">📈 차트</button>
-      <button onclick="setModalView('discuss','${ticker}')"
-        style="flex:1;padding:8px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid var(--border);background:${!isChart?'#e8f0fd':'transparent'};box-shadow:${!isChart?'2px 2px 0 var(--blue)':'none'};cursor:pointer;font-family:inherit;color:var(--text);">💬 토론방</button>
-    </div>
-    ${!isChart ? renderDiscuss('${ticker}') : \`
+  const tabBar = '<div style="display:flex;gap:6px;margin-bottom:12px;">'
+    + '<button onclick="setModalView(\'chart\',\''+ticker+'\')" style="flex:1;padding:8px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid var(--border);background:'+(isChart?'#fff':'transparent')+';box-shadow:'+(isChart?'2px 2px 0 var(--border)':'none')+';cursor:pointer;font-family:inherit;color:var(--text);">📈 차트</button>'
+    + '<button onclick="setModalView(\'discuss\',\''+ticker+'\')" style="flex:1;padding:8px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid var(--border);background:'+(!isChart?'#e8f0fd':'transparent')+';box-shadow:'+(!isChart?'2px 2px 0 var(--blue)':'none')+';cursor:pointer;font-family:inherit;color:var(--text);">💬 토론방</button>'
+    + '</div>';
+  if (!isChart) return tabBar + renderDiscuss(ticker);
+  return tabBar + `
     <div class="chart-period-tabs">
       <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','modal')">10분</button>
       <button class="chart-period-tab ${chartPeriod==='1h'?'active':''}"  onclick="setChartPeriod('1h','${ticker}','modal')">1시간</button>
@@ -1157,11 +1282,14 @@ function openChartModal(ticker) {
   modal.id = 'chart-modal-root';
   modal.className = 'chart-modal';
   modal.innerHTML = `
-    <div class="chart-modal-header">
+    <div class="chart-modal-header" style="position:relative;">
       <button class="chart-modal-back" onclick="closeChartModal()">← 뒤로</button>
       <div class="chart-modal-name" style="color:${stock?.color}">${stock?.name}</div>
       <div class="chart-modal-price" style="color:${up?'var(--red)':dn?'var(--blue)':'var(--text)'}">${fmtF(price)}점</div>
       <div class="chart-modal-change ${up?'up':dn?'down':'flat'}">어제보다 ${up?'+':'-'}${Math.abs(pct).toFixed(2)}%</div>
+      <button class="ai-btn" onclick="openAiAssistant('${ticker}')" title="AI 어시스턴트">
+        <img src="${char_url}" alt="가나디 AI" />
+      </button>
     </div>
     <div class="chart-body" id="modal-chart-panel">
       ${renderChartModalInner(ticker)}
@@ -1171,6 +1299,140 @@ function openChartModal(ticker) {
   selectedStock = ticker;
   activeTradeType = 'buy';
   setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 50);
+}
+
+
+// ── AI 어시스턴트 ────────────────────────────────────────
+const GEMINI_API_KEY = 'AIzaSyBouMdoHR0EYwDI5Wimm9Boq3llRbVWPLc';
+let aiMessages = []; // 대화 히스토리
+let aiCurrentTicker = null;
+
+window.openAiAssistant = function(ticker) {
+  aiCurrentTicker = ticker;
+  const stock = getStocks().find(s => s.ticker === ticker);
+  const price = fbState.prices?.[ticker] ?? 0;
+  const pct   = pctChange(ticker);
+
+  document.getElementById('ai-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ai-modal';
+  modal.className = 'ai-modal';
+  modal.innerHTML = `
+    <div class="ai-panel">
+      <div class="ai-panel-header">
+        <div class="ai-msg-avatar"><img src="./icon-192.png" alt="AI" /></div>
+        <div class="ai-panel-title">가나디 AI 어시스턴트</div>
+        <button class="ai-close-btn" onclick="document.getElementById('ai-modal').remove()">✕</button>
+      </div>
+      <div class="ai-messages" id="ai-messages">
+        <div class="ai-msg">
+          <div class="ai-msg-avatar"><img src="./icon-192.png" alt="AI" /></div>
+          <div class="ai-bubble">안녕하세요! 저는 가나디 AI예요 🐾<br><b>${stock?.name}</b> 주식에 대해 무엇이든 물어보세요!<br><small style="color:var(--text3)">현재가: ${price.toFixed(1)}점 (어제보다 ${pct>=0?'+':''}${pct.toFixed(2)}%)</small></div>
+        </div>
+      </div>
+      <div class="ai-quick-btns">
+        <button class="ai-quick-btn" onclick="askAi('지금 ${stock?.name} 사는게 좋을까?')">지금 살까요?</button>
+        <button class="ai-quick-btn" onclick="askAi('${stock?.name} 주가 전망이 어때?')">전망은?</button>
+        <button class="ai-quick-btn" onclick="askAi('인버스랑 레버리지 차이가 뭐야?')">인버스/레버리지?</button>
+      </div>
+      <div class="ai-input-row">
+        <input class="ai-input" id="ai-input" placeholder="질문을 입력하세요..." maxlength="200"
+          onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendAiMsg(); }" />
+        <button class="ai-send" id="ai-send-btn" onclick="sendAiMsg()">전송</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  aiMessages = [];
+};
+
+window.askAi = function(question) {
+  const input = document.getElementById('ai-input');
+  if (input) { input.value = question; sendAiMsg(); }
+};
+
+window.sendAiMsg = async function() {
+  const input = document.getElementById('ai-input');
+  const text = input?.value.trim();
+  if (!text) return;
+
+  const ticker = aiCurrentTicker;
+  const stock  = getStocks().find(s => s.ticker === ticker);
+  const price  = fbState.prices?.[ticker] ?? 0;
+  const pct    = pctChange(ticker);
+  const held   = currentUser ? (fbState.students?.[currentUser]?.holdings?.[ticker] ?? 0) : 0;
+  const deposit = currentUser ? (fbState.students?.[currentUser]?.deposit ?? 0) : 0;
+
+  // 유저 메시지 표시
+  input.value = '';
+  addAiMessage('user', text);
+
+  // 전송 버튼 비활성화
+  const sendBtn = document.getElementById('ai-send-btn');
+  if (sendBtn) sendBtn.disabled = true;
+
+  // 생각 중 메시지
+  const thinkingId = 'ai-thinking-' + Date.now();
+  addAiMessage('ai', '생각 중...', thinkingId, true);
+
+  // 히스토리에 추가
+  aiMessages.push({ role: 'user', parts: [{ text }] });
+
+  // 시스템 컨텍스트 (첫 메시지에 포함)
+  const systemContext = `당신은 초등학생 주식 투자 교육 앱 "가나디증권"의 AI 어시스턴트예요.
+현재 종목: ${stock?.name} (${ticker})
+현재가: ${price.toFixed(1)}점
+전일 대비: ${pct>=0?'+':''}${pct.toFixed(2)}%
+사용자 보유: ${held}주
+사용자 예금: ${deposit.toFixed(0)}점
+모둠 구조: 1~6모둠이 있고 각 모둠의 총 자산이 주가에 영향을 줘요.
+인버스: 해당 주식이 내릴수록 오르는 상품. 레버리지: 2배 움직이는 상품.
+초등학생 눈높이에 맞게 쉽고 재미있게 설명해주세요. 200자 이내로 답변하세요.`;
+
+  const contents = aiMessages.length === 1
+    ? [{ role: 'user', parts: [{ text: systemContext + '\n\n질문: ' + text }] }]
+    : aiMessages;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents })
+      }
+    );
+    const data = await res.json();
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '답변을 가져오지 못했어요 😢';
+
+    // 생각 중 제거 후 답변 표시
+    document.getElementById(thinkingId)?.closest('.ai-msg')?.remove();
+    addAiMessage('ai', reply);
+    aiMessages.push({ role: 'model', parts: [{ text: reply }] });
+  } catch(e) {
+    document.getElementById(thinkingId)?.closest('.ai-msg')?.remove();
+    addAiMessage('ai', '네트워크 오류가 발생했어요. 다시 시도해주세요 😢');
+  }
+
+  if (sendBtn) sendBtn.disabled = false;
+  document.getElementById('ai-input')?.focus();
+};
+
+function addAiMessage(role, text, id, isThinking) {
+  const container = document.getElementById('ai-messages');
+  if (!container) return;
+  const isUser = role === 'user';
+  const div = document.createElement('div');
+  div.className = 'ai-msg' + (isUser ? ' user' : '');
+  div.innerHTML = isUser
+    ? `<div class="ai-msg-avatar user-av">나</div>
+       <div class="ai-bubble user">${text}</div>`
+    : `<div class="ai-msg-avatar"><img src="./icon-192.png" alt="AI" /></div>
+       <div class="ai-bubble ${isThinking ? 'thinking' : ''}" ${id ? 'id="'+id+'"' : ''}>${text.replace(/\n/g,'<br>')}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 }
 
 function closeChartModal() {
