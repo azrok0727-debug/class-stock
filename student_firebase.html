@@ -37,6 +37,8 @@ body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif
 .header-left h1{font-size:17px;font-weight:700;}
 .header-left p{font-size:12px;color:var(--text2);margin-top:2px;}
 .market-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;}
+.logout-btn{background:none;border:1.5px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text2);font-family:inherit;margin-left:8px;box-shadow:1px 1px 0 var(--border);}
+.logout-btn:active{transform:translate(1px,1px);box-shadow:none;}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
 .status-dot.open{background:var(--green);box-shadow:0 0 6px var(--green);}
 .login-screen{padding:40px 0;}
@@ -74,14 +76,14 @@ body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif
 .chart-modal-change{font-size:14px;}
 /* ── AI 어시스턴트 ── */
 .ai-btn {
-  position: absolute; top: 10px; right: 10px;
-  width: 52px; height: 52px;
+  position: absolute; top: 8px; right: 8px;
+  width: 72px; height: 72px;
   background: none; border: none; cursor: pointer;
   padding: 0; z-index: 10;
 }
 .ai-btn img {
   width: 100%; height: 100%;
-  border-radius: 50%;
+  border-radius: 12px;
   border: 2px solid var(--border);
   box-shadow: 2px 2px 0 var(--border);
   background: #fff;
@@ -1310,7 +1312,7 @@ window.openChartModal = function openChartModal(ticker) {
       <div class="chart-modal-price" style="color:${up?'var(--red)':dn?'var(--blue)':'var(--text)'}">${fmtF(price)}점</div>
       <div class="chart-modal-change ${up?'up':dn?'down':'flat'}">어제보다 ${up?'+':'-'}${Math.abs(pct).toFixed(2)}%</div>
       <button class="ai-btn" onclick="openAiAssistant('${ticker}')" title="AI 어시스턴트">
-        <img src="${char_url}" alt="가나디 AI" />
+        <img src="./icon-192.png" alt="가나디 AI" />
       </button>
     </div>
     <div class="chart-body" id="modal-chart-panel">
@@ -1719,6 +1721,8 @@ function attachLoginBtn() {
         update(ref(db, `state/students/${name}`), { deposit:1000, holdings:{}, history:[], group:0 });
       }
       document.getElementById('user-label').textContent = `${name} (관리자)`;
+      const lb = document.getElementById('logout-btn');
+      if (lb) lb.style.display = 'inline-block';
       startPriceTick();
       renderMain();
       return;
@@ -1727,6 +1731,8 @@ function attachLoginBtn() {
     currentUser = name;
     const gName = GROUPS.find(g => g.id === fbState?.students?.[name]?.group)?.name ?? '';
     document.getElementById('user-label').textContent = `${name} (${gName})`;
+    const lb = document.getElementById('logout-btn');
+    if (lb) lb.style.display = 'inline-block';
     startPriceTick();
     renderMain();
   });
@@ -2134,6 +2140,16 @@ function renderNews() {
     </div>
   `).join('')}</div>`;
 }
+
+window.doLogout = function() {
+  if (!confirm('로그아웃 하시겠습니까?')) return;
+  currentUser = null;
+  selectedStock = null;
+  activeTab = 'market';
+  document.getElementById('logout-btn').style.display = 'none';
+  document.getElementById('user-label').textContent = '로그인 필요';
+  renderMain();
+};
 
 // ── 시작 ─────────────────────────────────────────────
 await ensureInitialized();
