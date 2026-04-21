@@ -228,7 +228,7 @@ function attachLoginBtn() {
     if (inp?.value === ADMIN_PW) {
       isAdmin = true;
       localStorage.setItem('adminLoggedIn', 'true');
-      document.getElementById('logout-btn').style.display = 'block';
+      showLogoutBtn();
       renderAdminMain();
       showToast('관리자로 로그인되었습니다', 'success');
     } else {
@@ -645,7 +645,8 @@ function showToast(msg, type='info') {
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-function doLogout() {
+// module 스크립트 내부 함수는 onclick에서 직접 호출 불가 → window에 등록
+window.doLogout = function() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
   localStorage.removeItem('adminLoggedIn');
   isAdmin = false;
@@ -653,20 +654,28 @@ function doLogout() {
   document.getElementById('logout-btn').style.display = 'none';
   document.getElementById('main-content').innerHTML = renderLogin();
   attachLoginBtn();
+};
+
+function showLogoutBtn() {
+  const btn = document.getElementById('logout-btn');
+  if (btn) btn.style.display = 'block';
 }
 
 // ── 시작 ─────────────────────────────────────────────
+subscribeState(); // 항상 Firebase 먼저 연결
+
 if (isAdmin) {
-  // 자동 로그인
-  subscribeState();
-  // Firebase 데이터 로딩 후 렌더
+  // 자동 로그인: Firebase 데이터 올 때까지 대기 후 렌더
   const waitRender = setInterval(() => {
-    if (fbState) { clearInterval(waitRender); renderAdminMain(); document.getElementById('logout-btn').style.display = 'block'; }
+    if (fbState) {
+      clearInterval(waitRender);
+      renderAdminMain();
+      showLogoutBtn();
+    }
   }, 200);
 } else {
   document.getElementById('main-content').innerHTML = renderLogin();
   attachLoginBtn();
-  subscribeState();
 }
 </script>
 </body>
