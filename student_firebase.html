@@ -21,16 +21,17 @@
 
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;
-  --border:#30363d;--border2:#484f58;
-  --text:#e6edf3;--text2:#8b949e;--text3:#656d76;
-  --green:#3fb950;--green-bg:rgba(63,185,80,0.15);
-  --red:#f85149;--red-bg:rgba(248,81,73,0.15);
-  --blue:#58a6ff;--blue-bg:rgba(88,166,255,0.12);
-  --purple:#bc8cff;--purple-bg:rgba(188,140,255,0.12);
+  --bg:#faf8f3;--bg2:#ffffff;--bg3:#f0ede6;--bg4:#e8e4dc;
+  --border:#2d2d2d;--border2:#1a1a1a;
+  --text:#1a1a1a;--text2:#555555;--text3:#888888;
+  --green:#3fb950;--green-bg:rgba(63,185,80,0.12);
+  --red:#e03030;--red-bg:rgba(224,48,48,0.12);
+  --blue:#2266cc;--blue-bg:rgba(34,102,204,0.12);
+  --purple:#7744cc;--purple-bg:rgba(119,68,204,0.12);
   --radius:8px;--radius-lg:12px;
+  --sketch-font:'SeoulNamsan',cursive,sans-serif;
 }
-body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif;min-height:100vh;} * { -webkit-font-smoothing: antialiased; }
 .app{max-width:760px;margin:0 auto;padding:0 0 80px;}
 .header{padding:20px 16px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:50;}
 .header-left h1{font-size:17px;font-weight:700;}
@@ -95,7 +96,7 @@ canvas.chart-canvas{display:block;width:100%;}
 /* ── 스플래시 스크린 ── */
 #splash {
   position: fixed; inset: 0; z-index: 9999;
-  background: #0d1117;
+  background: #faf8f3;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   overflow: hidden;
@@ -116,7 +117,7 @@ canvas.chart-canvas{display:block;width:100%;}
   opacity: 0;
   animation: candlesFadeIn 0.5s ease 0.2s forwards;
 }
-@keyframes candlesFadeIn { to { opacity: 0.18; } }
+@keyframes candlesFadeIn { to { opacity: 0.25; } }
 
 .splash-candle {
   display: flex; flex-direction: column;
@@ -160,7 +161,7 @@ canvas.chart-canvas{display:block;width:100%;}
 .splash-title {
   font-family: 'SeoulNamsan', sans-serif;
   font-size: 28px; font-weight: 700;
-  color: #e6edf3;
+  color: #1a1a1a;
   margin-top: 18px;
   opacity: 0;
   transform: translateY(12px);
@@ -208,7 +209,7 @@ canvas.chart-canvas{display:block;width:100%;}
 @keyframes barFadeIn { to { opacity: 1; } }
 .splash-bar {
   height: 100%;
-  background: linear-gradient(90deg, #f85149, #58a6ff);
+  background: linear-gradient(90deg, #e03030, #2266cc);
   border-radius: 2px;
   width: 0%;
   animation: barLoad 2.5s ease 1.3s forwards;
@@ -217,7 +218,7 @@ canvas.chart-canvas{display:block;width:100%;}
 
 .splash-sub {
   font-family: 'SeoulNamsan', sans-serif;
-  font-size: 11px; color: #656d76;
+  font-size: 11px; color: #888888;
   margin-top: 10px;
   opacity: 0;
   animation: titleRise 0.4s ease 1.4s forwards;
@@ -391,7 +392,7 @@ canvas.chart-canvas{display:block;width:100%;}
   /* PC 헤더 */
   .header {
     padding: 0 28px; height: 56px;
-    background: var(--bg2); border-bottom: 1px solid var(--border);
+    background: #ffffff; border-bottom: 2px solid var(--border);
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     display: flex; align-items: center;
   }
@@ -409,7 +410,7 @@ canvas.chart-canvas{display:block;width:100%;}
     width: 180px; flex-shrink: 0;
     display: flex !important; flex-direction: column !important;
     padding: 16px 10px; gap: 3px !important;
-    background: var(--bg2); border-right: 1px solid var(--border);
+    background: #ffffff; border-right: 2px solid var(--border);
     border-bottom: none !important; position: static !important;
     overflow-y: auto;
   }
@@ -552,9 +553,7 @@ canvas.chart-canvas{display:block;width:100%;}
     <div class="splash-bar-wrap"><div class="splash-bar"></div></div>
     <div class="splash-sub">우리반 모의 주식투자</div>
   </div>
-  <div class="splash-price-labels">
-    <span>20</span><span>18</span><span>16</span><span>14</span><span>12</span>
-  </div>
+
 </div>
 <div class="app">
   <div class="header">
@@ -576,6 +575,7 @@ canvas.chart-canvas{display:block;width:100%;}
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<img src="./icon-192.png" class="bottom-char" alt="가나디 캐릭터" />
 
 <!-- Firebase SDK -->
 <script type="module">
@@ -671,6 +671,13 @@ function subscribeState() {
     if (currentUser) {
       renderCurrentTab();
       refreshPcChart();
+      // 토론방 열려있으면 메시지 갱신
+      if (chartModalTicker && chartModalView === 'discuss') {
+        const panel = document.getElementById('modal-chart-panel');
+        if (panel && document.activeElement?.id !== 'discuss-input') {
+          panel.innerHTML = renderChartModalInner(chartModalTicker);
+        }
+      }
     }
     else renderMain();
   }, err => {
@@ -861,6 +868,7 @@ function renderLogin() {
 // ── 차트 관련 ────────────────────────────────────────
 let chartPeriod = '10m'; // '10m','1h','all'
 let chartModalTicker = null;
+let chartModalView = 'chart'; // 'chart' | 'discuss'
 
 function getCandles(ticker, period) {
   const raw = fbState.candles?.[ticker] ?? {};
@@ -1038,12 +1046,83 @@ window.setChartPeriod = function setChartPeriod(p, ticker, mode) {
 }
 
 // ── 모바일 차트 모달 ─────────────────────────────────
+
+// ── 토론방 ──────────────────────────────────────────────
+window.setModalView = function(view, ticker) {
+  chartModalView = view;
+  const panel = document.getElementById('modal-chart-panel');
+  if (panel) {
+    panel.innerHTML = renderChartModalInner(ticker);
+    if (view === 'chart') {
+      setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 30);
+    }
+  }
+};
+
+window.sendDiscussMsg = async function(ticker) {
+  const input = document.getElementById('discuss-input');
+  const text = input?.value.trim();
+  if (!text || !currentUser) return;
+  const id = 'msg_' + Date.now();
+  const msg = {
+    id, text,
+    author: currentUser,
+    ts: Date.now(),
+    date: new Date().toLocaleString('ko-KR')
+  };
+  await update(ref(db, `state/discuss/${ticker}`), { [id]: msg });
+  input.value = '';
+};
+
+function renderDiscuss(ticker) {
+  const msgObj = fbState.discuss?.[ticker] ?? {};
+  const msgs = Object.values(msgObj).filter(Boolean).sort((a,b)=>a.ts-b.ts);
+  const stock = getStocks().find(s=>s.ticker===ticker);
+  return `
+    <div class="discuss-wrap" id="discuss-scroll">
+      ${msgs.length === 0
+        ? '<div class="discuss-empty">📭 아직 메시지가 없어요.<br>첫 번째로 의견을 남겨보세요!</div>'
+        : msgs.map(m => {
+            const isMe = m.author === currentUser;
+            const initials = m.author.slice(0,1);
+            return \`
+              <div class="discuss-msg \${isMe?'mine':''}">
+                \${!isMe ? \`<div class="discuss-avatar">\${initials}</div>\` : ''}
+                <div>
+                  \${!isMe ? \`<div class="discuss-name">\${m.author}</div>\` : ''}
+                  <div class="discuss-bubble \${isMe?'mine':''}">
+                    <div class="discuss-text">\${m.text}</div>
+                    <div class="discuss-time">\${m.date}</div>
+                  </div>
+                </div>
+              </div>
+            \`;
+          }).join('')
+      }
+      <div style="height:70px;"></div>
+    </div>
+    <div class="discuss-input-row">
+      <input class="discuss-input" id="discuss-input" placeholder="${stock?.name || ticker} 토론방에 글 남기기..." maxlength="100"
+        onkeydown="if(event.key==='Enter')sendDiscussMsg('${ticker}')" />
+      <button class="discuss-send" onclick="sendDiscussMsg('${ticker}')">전송</button>
+    </div>
+  `;
+}
+
 function renderChartModalInner(ticker) {
   const stock  = getStocks().find(s => s.ticker === ticker);
   const price  = fbState.prices?.[ticker] ?? 0;
   const pct    = pctChange(ticker);
   const up = pct > 0, dn = pct < 0;
+  const isChart = chartModalView !== 'discuss';
   return `
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button onclick="setModalView('chart','${ticker}')"
+        style="flex:1;padding:8px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid var(--border);background:${isChart?'#fff':'transparent'};box-shadow:${isChart?'2px 2px 0 var(--border)':'none'};cursor:pointer;font-family:inherit;color:var(--text);">📈 차트</button>
+      <button onclick="setModalView('discuss','${ticker}')"
+        style="flex:1;padding:8px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid var(--border);background:${!isChart?'#e8f0fd':'transparent'};box-shadow:${!isChart?'2px 2px 0 var(--blue)':'none'};cursor:pointer;font-family:inherit;color:var(--text);">💬 토론방</button>
+    </div>
+    ${!isChart ? renderDiscuss('${ticker}') : \`
     <div class="chart-period-tabs">
       <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','modal')">10분</button>
       <button class="chart-period-tab ${chartPeriod==='1h'?'active':''}"  onclick="setChartPeriod('1h','${ticker}','modal')">1시간</button>
@@ -1097,6 +1176,7 @@ function openChartModal(ticker) {
 function closeChartModal() {
   document.getElementById('chart-modal-root')?.remove();
   chartModalTicker = null;
+  chartModalView = 'chart';
 }
 window.closeChartModal    = closeChartModal;
 
