@@ -246,6 +246,7 @@ function renderAdminMain() {
       <button class="tab ${activeTab==='groups'?'active':''}"    data-tab="groups">🏢 모둠 점수</button>
       <button class="tab ${activeTab==='stocks'?'active':''}"    data-tab="stocks">📈 주식 관리</button>
       <button class="tab ${activeTab==='transactions'?'active':''}" data-tab="transactions">📋 거래내역</button>
+      <button class="tab ${activeTab==='news'?'active':''}"      data-tab="news">📰 뉴스 관리</button>
       <button class="tab" data-tab="reset" style="color:var(--red)">⚠️ 초기화</button>
     </div>
     <div id="tab-content"></div>`;
@@ -268,6 +269,7 @@ function renderTab() {
   if (activeTab === 'groups')       el.innerHTML = renderGroups();
   if (activeTab === 'stocks')       el.innerHTML = renderStocks();
   if (activeTab === 'transactions') el.innerHTML = renderTransactions();
+  if (activeTab === 'news')         el.innerHTML = renderNewsAdmin();
   if (activeTab === 'reset')        el.innerHTML = renderReset();
   attachTabListeners();
 }
@@ -536,6 +538,81 @@ function renderReset() {
 }
 
 // ── 탭 내 이벤트 ───────────────────────────────────────
+
+// ── 뉴스 관리 탭 ────────────────────────────────────────
+function renderNewsAdmin() {
+  const news = fbState.news || [];
+  const sorted = [...news].sort((a,b) => (b.ts||0) - (a.ts||0));
+  return `
+    <div class="card">
+      <h2>📰 뉴스 작성</h2>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">카테고리</label>
+          <select id="news-cat" class="inline-input" style="width:160px;">
+            <option value="공지">공지</option>
+            <option value="시장">시장 뉴스</option>
+            <option value="이벤트">이벤트</option>
+            <option value="경고">경고</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">제목</label>
+          <input class="inline-input" type="text" id="news-title" placeholder="뉴스 제목" style="width:100%;padding:8px 12px;" />
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">내용</label>
+          <textarea id="news-body" placeholder="뉴스 내용을 입력하세요..."
+            style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:'Noto Sans KR',sans-serif;outline:none;resize:vertical;min-height:100px;"></textarea>
+        </div>
+        <button class="btn btn-save" id="btn-post-news" style="width:120px;">게시하기</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📋 게시된 뉴스 <span class="section-tag">${sorted.length}건</span></h2>
+      ${sorted.length === 0 ? '<div style="text-align:center;padding:32px;color:var(--text2)">게시된 뉴스가 없습니다.</div>' :
+        sorted.map(n => `
+          <div style="background:var(--bg3);border-radius:var(--radius);padding:12px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;background:var(--blue-bg);color:var(--blue);">${n.category||'공지'}</span>
+                <span style="font-size:11px;color:var(--text3)">${n.date||''}</span>
+              </div>
+              <button class="btn-sm red" data-delete-news="${n.id}">삭제</button>
+            </div>
+            <div style="font-size:14px;font-weight:700;margin-bottom:6px;">${n.title||''}</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.5;">${(n.body||'').replace(/\n/g,'<br>')}</div>
+          </div>
+        `).join('')
+      }
+    </div>
+  `;
+}
+
+async function postNews() {
+  const title = document.getElementById('news-title')?.value.trim();
+  const body  = document.getElementById('news-body')?.value.trim();
+  const cat   = document.getElementById('news-cat')?.value || '공지';
+  if (!title) return showToast('제목을 입력해주세요', 'error');
+  if (!body)  return showToast('내용을 입력해주세요', 'error');
+  const id  = 'news_' + Date.now();
+  const now = new Date().toLocaleString('ko-KR');
+  const item = { id, title, body, category: cat, date: now, ts: Date.now() };
+  const existing = fbState.news || [];
+  await update(ref(db), { 'state/news': [...existing, item] });
+  showToast('뉴스가 게시되었습니다!', 'success');
+  renderTab();
+}
+
+async function deleteNews(id) {
+  if (!confirm('이 뉴스를 삭제하시겠습니까?')) return;
+  const filtered = (fbState.news || []).filter(n => n.id !== id);
+  await update(ref(db), { 'state/news': filtered });
+  showToast('삭제되었습니다', 'info');
+  renderTab();
+}
+
 function attachTabListeners() {
   // 예금 저장
   document.querySelectorAll('[data-save-dep]').forEach(btn => {
@@ -591,6 +668,12 @@ function attachTabListeners() {
       });
       showToast(`${key} → ${fmtF(val)}점`, 'success');
     });
+  });
+  // 뉴스 게시 버튼
+  document.getElementById('btn-post-news')?.addEventListener('click', postNews);
+  // 뉴스 삭제 버튼
+  document.querySelectorAll('[data-delete-news]').forEach(btn => {
+    btn.addEventListener('click', () => deleteNews(btn.dataset.deleteNews));
   });
   // 초기화 버튼
   document.querySelectorAll('[data-reset]').forEach(btn => {

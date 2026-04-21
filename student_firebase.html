@@ -156,72 +156,64 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 @media (min-width: 900px) {
   body { background: var(--bg); }
   .app { max-width: 100%; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-  
+
   /* PC 헤더 */
-  .header { 
-    padding: 0 32px; height: 60px; 
+  .header {
+    padding: 0 28px; height: 56px;
     background: var(--bg2); border-bottom: 1px solid var(--border);
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     display: flex; align-items: center;
   }
-  .header-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; margin-right: 10px; }
-  .header-left h1 { font-size: 16px; }
+  .header-logo { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; margin-right: 10px; }
+  .header-left h1 { font-size: 15px; }
   .header-left p { font-size: 11px; }
 
-  /* PC 사이드바 + 콘텐츠 2열 구조 */
-  #main-content { margin-top: 60px; display: flex; height: calc(100vh - 60px); overflow: hidden; }
+  /* 사이드바 + 본문 */
+  #main-content { margin-top: 56px; display: flex; height: calc(100vh - 56px); overflow: hidden; }
 
-  /* 사이드바 탭 */
+  /* 사이드바 */
   #tabs-nav {
-    width: 200px; flex-shrink: 0;
+    width: 180px; flex-shrink: 0;
     display: flex !important; flex-direction: column !important;
-    padding: 20px 12px; gap: 4px !important;
+    padding: 16px 10px; gap: 3px !important;
     background: var(--bg2); border-right: 1px solid var(--border);
     border-bottom: none !important; position: static !important;
     overflow-y: auto;
   }
-  #tabs-nav .tab {
-    text-align: left; padding: 10px 14px;
-    border-radius: var(--radius); font-size: 13px;
-  }
+  #tabs-nav .tab { text-align: left; padding: 9px 12px; border-radius: var(--radius); font-size: 13px; }
   #tabs-nav .tab.active { background: var(--bg3); }
 
-  /* 메인 콘텐츠 영역 */
-  #tab-content {
-    flex: 1; overflow-y: auto; padding: 24px 32px;
-    display: grid;
-  }
+  /* 콘텐츠 영역: 최대 너비 제한 */
+  #tab-content { flex: 1; overflow-y: auto; padding: 20px 28px; max-width: 1100px; }
 
-  /* 시장탭: 주식목록 + 거래패널 2열 */
-  .market-grid {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 20px;
-    align-items: start;
-  }
+  /* 시장 탭: 종목 목록 왼쪽, 거래 패널 오른쪽 */
+  .market-grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
   .market-left { min-width: 0; }
   .market-right { position: sticky; top: 0; }
 
-  /* 포트폴리오 카드 그리드 */
-  .holdings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 12px;
-  }
+  /* 종목 목록 2열 그리드 (base, inv, lev 각각) */
+  .stocks-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stocks-2col .stock-row { margin-bottom: 0; }
+
+  /* 포트폴리오: 3열 카드 그리드 */
+  .holdings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .holdings-grid .holding-card { margin-bottom: 0; }
 
-  /* 순위 + 자산 나란히 */
-  .rank-asset-grid {
-    display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 20px;
-    align-items: start;
-  }
-
-  /* 메트릭 카드 더 크게 */
+  /* 메트릭: 4열 */
   .metrics { grid-template-columns: repeat(4, 1fr); }
-  .metric-value { font-size: 22px; }
-  
+  .metric-value { font-size: 20px; }
+
+  /* 순위 탭: 순위표 왼쪽, 내 자산 오른쪽 */
+  .rank-asset-grid { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+
+  /* 거래내역: 2열 */
+  .history-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .history-2col .history-item { margin-bottom: 0; }
+
+  /* 뉴스: 카드 2열 그리드 */
+  .news-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .news-grid .news-card { margin-bottom: 0; }
+
   /* 로그인 카드 중앙 */
   .login-screen { display: flex; align-items: center; justify-content: center; height: 100%; padding: 0; }
 }
@@ -453,6 +445,7 @@ function renderMain() {
       <button class="tab ${activeTab==='history'?'active':''}"   data-tab="history">📋 거래내역</button>
       <button class="tab ${activeTab==='ranking'?'active':''}"   data-tab="ranking">🏆 순위</button>
       <button class="tab ${activeTab==='assets'?'active':''}"    data-tab="assets">💰 자산확인</button>
+      <button class="tab ${activeTab==='news'?'active':''}"      data-tab="news">📰 뉴스</button>
     </nav>
     <div id="tab-content"></div>`;
   document.getElementById('tabs-nav').addEventListener('click', e => {
@@ -474,6 +467,7 @@ function renderCurrentTab() {
   if (activeTab === 'history')    el.innerHTML = renderHistory();
   if (activeTab === 'ranking')    el.innerHTML = renderRanking();
   if (activeTab === 'assets')     el.innerHTML = renderAssets();
+  if (activeTab === 'news')       el.innerHTML = renderNews();
   attachTabListeners();
 }
 
@@ -735,7 +729,7 @@ function renderHistory() {
   const hist = [...(fbState.students[currentUser]?.history ?? [])].reverse();
   if (!hist.length) return `<div class="empty"><div class="empty-icon">📋</div>거래 내역이 없습니다.</div>`;
   const stocks = getStocks();
-  return hist.map(h => {
+  return `<div class="history-2col">` + hist.map(h => {
     const stock = stocks.find(s => s.ticker === h.ticker);
     const isBuy = h.type === 'buy';
     return `
@@ -750,7 +744,7 @@ function renderHistory() {
           <div class="hist-date">${h.date}</div>
         </div>
       </div>`;
-  }).join('');
+  }).join('') + `</div>`;
 }
 
 // ── 순위 탭 ─────────────────────────────────────────────
@@ -842,6 +836,26 @@ function showToast(msg, type='info') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = `toast ${type} show`;
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+
+// ── 뉴스 탭 ────────────────────────────────────────────
+function renderNews() {
+  const news = fbState.news || [];
+  if (!news.length) {
+    return `<div class="empty"><div class="empty-icon">📰</div>등록된 뉴스가 없습니다.<br><span style="font-size:12px;color:var(--text3)">선생님이 뉴스를 작성하면 여기에 표시됩니다.</span></div>`;
+  }
+  const sorted = [...news].sort((a,b) => (b.ts||0) - (a.ts||0));
+  return `<div class="news-grid">${sorted.map(n => `
+    <div class="news-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;background:var(--blue-bg);color:var(--blue);">${n.category||'공지'}</span>
+        <span style="font-size:11px;color:var(--text3);">${n.date||''}</span>
+      </div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text)">${n.title||''}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6;">${(n.body||'').replace(/\n/g,'<br>')}</div>
+    </div>
+  `).join('')}</div>`;
 }
 
 // ── 시작 ─────────────────────────────────────────────
