@@ -1,6 +1,6 @@
 {
-  "name": "가나다증권 — 관리자",
-  "short_name": "가나다증권 관리",
+  "name": "가나디증권 — 관리자",
+  "short_name": "가나디증권 관리",
   "description": "우리반 모의 주식 투자 관리자",
   "start_url": "./admin_firebase.html",
   "display": "standalone",

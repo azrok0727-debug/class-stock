@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>가나다증권 관리자</title>
+<title>가나디증권 관리자</title>
 <link rel="manifest" href="./manifest-admin.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="가나다증권 관리">
+<meta name="apple-mobile-web-app-title" content="가나디증권 관리">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <meta name="theme-color" content="#0d1117">
 <style>
@@ -92,7 +92,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 <div class="app">
   <div class="header">
     <div><h1>⚙️ 우리반 주식시장 — 관리자</h1><p>ADMIN PANEL</p></div>
-    <div class="market-ctrl" id="market-ctrl"></div>
+    <div style="display:flex;align-items:center;gap:10px;"><div class="market-ctrl" id="market-ctrl"></div><button id="logout-btn" style="display:none;padding:6px 12px;font-size:12px;font-weight:600;border-radius:8px;border:1px solid #484f58;background:transparent;color:#656d76;cursor:pointer;font-family:Noto Sans KR,sans-serif;" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div id="main-content">
     <div class="loading-screen"><div class="spinner"></div><span>Firebase 연결 중...</span></div>
@@ -134,6 +134,11 @@ const ADMIN_PW = 'teacher2024';
 let fbState   = null;
 let isAdmin   = false;
 let activeTab = 'dashboard';
+
+// 로그인 유지: 이전에 로그인한 적 있으면 자동 로그인
+if (localStorage.getItem('adminLoggedIn') === 'true') {
+  isAdmin = true;
+}
 
 // ── 유틸 ──────────────────────────────────────────────
 function fmt(n)    { return Math.round(n).toLocaleString(); }
@@ -222,6 +227,8 @@ function attachLoginBtn() {
   btn?.addEventListener('click', () => {
     if (inp?.value === ADMIN_PW) {
       isAdmin = true;
+      localStorage.setItem('adminLoggedIn', 'true');
+      document.getElementById('logout-btn').style.display = 'block';
       renderAdminMain();
       showToast('관리자로 로그인되었습니다', 'success');
     } else {
@@ -638,10 +645,29 @@ function showToast(msg, type='info') {
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
+function doLogout() {
+  if (!confirm('로그아웃 하시겠습니까?')) return;
+  localStorage.removeItem('adminLoggedIn');
+  isAdmin = false;
+  document.getElementById('market-ctrl').innerHTML = '';
+  document.getElementById('logout-btn').style.display = 'none';
+  document.getElementById('main-content').innerHTML = renderLogin();
+  attachLoginBtn();
+}
+
 // ── 시작 ─────────────────────────────────────────────
-document.getElementById('main-content').innerHTML = renderLogin();
-attachLoginBtn();
-subscribeState();
+if (isAdmin) {
+  // 자동 로그인
+  subscribeState();
+  // Firebase 데이터 로딩 후 렌더
+  const waitRender = setInterval(() => {
+    if (fbState) { clearInterval(waitRender); renderAdminMain(); document.getElementById('logout-btn').style.display = 'block'; }
+  }, 200);
+} else {
+  document.getElementById('main-content').innerHTML = renderLogin();
+  attachLoginBtn();
+  subscribeState();
+}
 </script>
 </body>
 </html>
