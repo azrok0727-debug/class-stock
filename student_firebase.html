@@ -830,7 +830,27 @@ function subscribeState() {
     updateStatusUI();
     updateNoticeBar();
     if (currentUser) {
-      renderCurrentTab();
+      // ── 입력 중이면 전체 재렌더 건너뜀 ──────────────
+      const focused = document.activeElement;
+      const isTyping = focused && (
+        focused.tagName === 'INPUT' ||
+        focused.tagName === 'TEXTAREA' ||
+        focused.tagName === 'SELECT'
+      );
+      // 수량 입력창에 포커스 있으면 거래 패널만 보호
+      const isQtyInput = focused?.id === 'trade-qty' || focused?.id === 'modal-trade-qty';
+
+      if (!isQtyInput) {
+        // 거래 수량 임시 저장
+        const savedQty = document.getElementById('trade-qty')?.value
+          || document.getElementById('modal-trade-qty')?.value;
+        renderCurrentTab();
+        // 수량 복원
+        if (savedQty) {
+          const qtyEl = document.getElementById('trade-qty') || document.getElementById('modal-trade-qty');
+          if (qtyEl) qtyEl.value = savedQty;
+        }
+      }
       refreshPcChart();
       // 토론방 열려있으면 메시지 갱신
       if (chartModalTicker && chartModalView === 'discuss') {
@@ -841,8 +861,16 @@ function subscribeState() {
           setTimeout(() => bindDiscussEvents(chartModalTicker), 30);
         }
       }
+    } else {
+      // ── 로그인 화면: 드롭다운 선택 중이면 재렌더 안 함 ──
+      const loginSelect = document.getElementById('login-select');
+      const isSelectOpen = loginSelect && document.activeElement === loginSelect;
+      const pwInput = document.getElementById('teacher-pw-input');
+      const isPwTyping = pwInput && document.activeElement === pwInput;
+      if (!isSelectOpen && !isPwTyping) {
+        renderMain();
+      }
     }
-    else renderMain();
   }, err => {
     document.getElementById('main-content').innerHTML =
       `<div class="empty"><div class="empty-icon">⚠️</div>Firebase 연결 실패<br><small style="color:var(--text3)">${err.message}</small></div>`;
