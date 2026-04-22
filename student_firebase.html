@@ -1100,19 +1100,22 @@ function renderLogin() {
         </div>
         <select id="login-select">
           <option value="">— 이름 선택 —</option>
-          ${GROUPS.map(g => `
-            <optgroup label="${g.name}">
-              ${g.members.map(m => `<option value="${m}">${m}</option>`).join('')}
-            </optgroup>`).join('')}
+          \${GROUPS.map(g => \`
+            <optgroup label="\${g.name}">
+              \${g.members.map(m => \`<option value="\${m}">\${m}</option>\`).join('')}
+            </optgroup>\`).join('')}
           <optgroup label="관리자">
             <option value="김민재 선생님">김민재 선생님</option>
           </optgroup>
         </select>
-        <div id="teacher-pw-wrap" style="display:none;margin-bottom:12px;">
-          <input type="password" id="teacher-pw-input" placeholder="비밀번호 입력"
-            style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;outline:none;" />
+        <div id="pw-input-wrap" style="margin-bottom:12px;">
+          <input type="password" id="student-pw-input" placeholder="비밀번호 입력"
+            style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;outline:none;box-sizing:border-box;" />
         </div>
         <button class="btn-primary" id="login-btn">입장하기</button>
+        <div id="login-hint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:10px;">
+          비밀번호가 없는 학생은 초기 비밀번호: <b>1234</b>
+        </div>
       </div>
     </div>`;
 }
@@ -1375,6 +1378,13 @@ function bindDiscussEvents(ticker) {
 }
 window.bindDiscussEvents = bindDiscussEvents;
 
+
+window.deleteDiscussMsg = async function(ticker, msgId) {
+  if (!confirm('이 메시지를 삭제하시겠습니까?')) return;
+  await update(ref(db, 'state/discuss/' + ticker), { [msgId]: null });
+  showToast('메시지가 삭제됐어요', 'info');
+};
+
 window.sendDiscussMsg = async function(ticker) {
   const input = document.getElementById('discuss-input');
   const text = input?.value.trim();
@@ -1417,6 +1427,11 @@ function renderDiscuss(ticker) {
       var nameHtml = isMe ? '' : '<div class="discuss-name">' + m.author + '</div>';
       var bubbleClass = 'discuss-bubble' + (isMe ? ' mine' : '');
       var msgClass = 'discuss-msg' + (isMe ? ' mine' : '');
+      var isTeacher = (currentUser === TEACHER_ACCOUNT.name);
+      var deleteBtn = isTeacher
+        ? '<button onclick="deleteDiscussMsg(' + JSON.stringify(ticker) + ',' + JSON.stringify(m.id) + ')" ' +
+          'style="background:none;border:none;cursor:pointer;font-size:11px;color:#e03030;padding:2px 4px;margin-top:2px;font-family:inherit;">🗑 삭제</button>'
+        : '';
       msgHtml += '<div class="' + msgClass + '">' +
         avatarHtml +
         '<div class="discuss-content">' +
@@ -1425,6 +1440,7 @@ function renderDiscuss(ticker) {
             '<div class="discuss-text">' + m.text + '</div>' +
             '<div class="discuss-time">' + m.date + '</div>' +
           '</div>' +
+          deleteBtn +
         '</div>' +
       '</div>';
     });
@@ -1973,26 +1989,20 @@ function attachLoginBtn() {
   const sel = document.getElementById('login-select');
   const btn = document.getElementById('login-btn');
 
-  // 선생님 선택 시 비밀번호 입력창 표시/숨김
-  sel?.addEventListener('change', () => {
-    const pwWrap = document.getElementById('teacher-pw-wrap');
-    if (pwWrap) pwWrap.style.display = sel.value === TEACHER_ACCOUNT.name ? 'block' : 'none';
-  });
-
-  btn?.addEventListener('click', () => {
+  btn?.addEventListener('click', async () => {
     const name = sel?.value;
     if (!name) { showToast('이름을 선택해주세요', 'error'); return; }
+    const pw = document.getElementById('student-pw-input')?.value || '';
 
-    // 선생님 계정 비밀번호 확인
+    // ── 선생님 계정 ──────────────────────────────────
     if (name === TEACHER_ACCOUNT.name) {
-      const pw = document.getElementById('teacher-pw-input')?.value;
       if (!pw) { showToast('비밀번호를 입력해주세요', 'error'); return; }
       if (pw !== TEACHER_ACCOUNT.password) { showToast('비밀번호가 틀렸습니다', 'error'); return; }
       currentUser = name;
       if (!fbState.students?.[name]) {
-        update(ref(db, `state/students/${name}`), { deposit:1000, holdings:{}, history:[], group:0 });
+        await update(ref(db, 'state/students/' + name), { deposit:1000, holdings:{}, history:[], group:0 });
       }
-      document.getElementById('user-label').textContent = `${name} (관리자)`;
+      document.getElementById('user-label').textContent = name + ' (관리자)';
       const lb = document.getElementById('logout-btn');
       if (lb) lb.style.display = 'inline-block';
       startPriceTick();
@@ -2000,9 +2010,14 @@ function attachLoginBtn() {
       return;
     }
 
+    // ── 학생 계정 비밀번호 확인 ─────────────────────
+    if (!pw) { showToast('비밀번호를 입력해주세요', 'error'); return; }
+    const savedPw = fbState.students?.[name]?.password ?? '1234'; // 초기 비번 1234
+    if (pw !== savedPw) { showToast('비밀번호가 틀렸습니다 ❌', 'error'); return; }
+
     currentUser = name;
     const gName = GROUPS.find(g => g.id === fbState?.students?.[name]?.group)?.name ?? '';
-    document.getElementById('user-label').textContent = `${name} (${gName})`;
+    document.getElementById('user-label').textContent = name + ' (' + gName + ')';
     const lb = document.getElementById('logout-btn');
     if (lb) lb.style.display = 'inline-block';
     startPriceTick();
@@ -2334,6 +2349,59 @@ async function executeTrade() {
 }
 
 // ── 포트폴리오 탭 ────────────────────────────────────────
+
+
+function renderDiscussAdmin() {
+  const discuss = fbState.discuss ?? {};
+  const stocks = getStocks();
+  let html = '<div style="background:#fff3e0;border:2px solid #ffb300;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:2px 2px 0 #ffb300;">';
+  html += '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:#e65100;">👮 토론방 관리 (선생님 전용)</div>';
+
+  stocks.filter(s => s.type === 'base').forEach(s => {
+    const msgs = Object.values(discuss[s.ticker] ?? {}).filter(Boolean).sort((a,b)=>a.ts-b.ts);
+    if (!msgs.length) return;
+    html += '<div style="margin-bottom:12px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;">📌 ' + s.name + ' (' + msgs.length + '개)</div>';
+    msgs.forEach(m => {
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#fff;border:1px solid #eee;border-radius:6px;margin-bottom:3px;font-size:12px;">';
+      html += '<span style="color:#888;">' + m.author + '</span>';
+      html += '<span style="flex:1;margin:0 8px;color:#333;">' + m.text + '</span>';
+      html += '<button onclick="deleteDiscussMsg(' + JSON.stringify(s.ticker) + ',' + JSON.stringify(m.id) + ')" style="padding:2px 8px;background:#fce4ec;border:1px solid #e03030;border-radius:4px;color:#e03030;cursor:pointer;font-size:11px;font-family:inherit;">삭제</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+function renderChangePw() {
+  return '<div style="background:#fff;border:2px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:2px 2px 0 var(--border);">' +
+    '<div style="font-size:14px;font-weight:700;margin-bottom:12px;">🔒 비밀번호 변경</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;">' +
+      '<input type="password" id="pw-current" placeholder="현재 비밀번호" style="padding:9px 14px;background:#f5f5f5;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" />' +
+      '<input type="password" id="pw-new" placeholder="새 비밀번호" style="padding:9px 14px;background:#f5f5f5;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" />' +
+      '<input type="password" id="pw-confirm" placeholder="새 비밀번호 확인" style="padding:9px 14px;background:#f5f5f5;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" />' +
+      '<button onclick="doChangePw()" style="padding:10px;background:#2266cc;color:#fff;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">변경하기</button>' +
+    '</div>' +
+  '</div>';
+}
+
+window.doChangePw = async function() {
+  const cur     = document.getElementById('pw-current')?.value;
+  const newPw   = document.getElementById('pw-new')?.value;
+  const confirm = document.getElementById('pw-confirm')?.value;
+  if (!cur || !newPw || !confirm) { showToast('모든 칸을 입력해주세요', 'error'); return; }
+  const savedPw = fbState.students?.[currentUser]?.password ?? '1234';
+  if (cur !== savedPw) { showToast('현재 비밀번호가 틀렸습니다', 'error'); return; }
+  if (newPw.length < 4) { showToast('비밀번호는 4자리 이상이어야 해요', 'error'); return; }
+  if (newPw !== confirm) { showToast('새 비밀번호가 일치하지 않습니다', 'error'); return; }
+  await update(ref(db, 'state/students/' + currentUser), { password: newPw });
+  showToast('비밀번호가 변경됐어요! 🎉', 'success');
+  renderCurrentTab();
+};
+
 function renderPortfolio() {
   const stu    = fbState.students[currentUser];
   const stocks = getStocks();
