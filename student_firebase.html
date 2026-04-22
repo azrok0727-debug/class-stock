@@ -1183,6 +1183,9 @@ function getCandles(ticker, period) {
   const now = Date.now() / 10000;
   if (period === '10m') candles = candles.filter(c => c.t >= now - 60);
   else if (period === '1h') candles = candles.filter(c => c.t >= now - 360);
+  else if (period === '6h') candles = candles.filter(c => c.t >= now - 2160);
+  else if (period === '1d') candles = candles.filter(c => c.t >= now - 8640);
+  // 'all' = 전체 기간
   // 줌 적용: chartZoom > 1이면 전체 캔들 중 일부만 표시
   if (chartZoom > 1 && candles.length > 4) {
     const visible = Math.max(4, Math.floor(candles.length / chartZoom));
@@ -1336,6 +1339,8 @@ function renderChartPanel(ticker) {
     <div class="chart-period-tabs">
       <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','pc')">10분</button>
       <button class="chart-period-tab ${chartPeriod==='1h'?'active':''}"  onclick="setChartPeriod('1h','${ticker}','pc')">1시간</button>
+      <button class="chart-period-tab ${chartPeriod==='6h'?'active':''}"  onclick="setChartPeriod('6h','${ticker}','pc')">6시간</button>
+      <button class="chart-period-tab ${chartPeriod==='1d'?'active':''}"  onclick="setChartPeriod('1d','${ticker}','pc')">1일</button>
       <button class="chart-period-tab ${chartPeriod==='all'?'active':''}" onclick="setChartPeriod('all','${ticker}','pc')">전체</button>
     </div>
     <canvas id="pc-candle-canvas" class="chart-canvas" style="height:200px;width:100%;"></canvas>
@@ -1543,6 +1548,8 @@ function renderChartModalInner(ticker) {
       <div class="chart-period-tabs" style="margin-bottom:0;">
         <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','modal')">10분</button>
         <button class="chart-period-tab ${chartPeriod==='1h'?'active':''}"  onclick="setChartPeriod('1h','${ticker}','modal')">1시간</button>
+        <button class="chart-period-tab ${chartPeriod==='6h'?'active':''}"  onclick="setChartPeriod('6h','${ticker}','modal')">6시간</button>
+        <button class="chart-period-tab ${chartPeriod==='1d'?'active':''}"  onclick="setChartPeriod('1d','${ticker}','modal')">1일</button>
         <button class="chart-period-tab ${chartPeriod==='all'?'active':''}" onclick="setChartPeriod('all','${ticker}','modal')">전체</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
@@ -2676,7 +2683,7 @@ function renderRanking() {
           <div class="rank-ret ${up?'up':'down'}">${up?'+':''}${ret.toFixed(2)}%</div>
         </div>
       </div>`;
-  }).join('') + `</div><div>${renderAssets()}</div></div>`;
+  }).join('') + `</div></div>`;
 }
 
 // ── 자산확인 탭 (PC에서는 순위탭 옆에 표시됨)
@@ -2763,10 +2770,7 @@ function renderNews() {
       <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text)">${n.title||''}</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.6;">${(n.body||'').replace(/\n/g,'<br>')}</div>
     </div>
-  `).join('')}</div>
-    <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
-      <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
-    </div>`;
+  `).join('')}</div>`;
 }
 
 window.doLogout = function() {
