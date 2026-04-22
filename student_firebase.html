@@ -1070,6 +1070,8 @@ function renderLogin() {
 let chartPeriod = '10m'; // '10m','1h','all'
 let chartModalTicker = null;
 let chartModalView = 'chart'; // 'chart' | 'discuss'
+let chartZoom = 1.0; // 1.0=기본, 2.0=2배 확대, 0.5=축소
+let chartOffsetPct = 0; // 0~1, 보이는 구간 시작점
 
 function getCandles(ticker, period) {
   const raw = fbState.candles?.[ticker] ?? {};
@@ -1077,7 +1079,13 @@ function getCandles(ticker, period) {
   const now = Date.now() / 10000;
   if (period === '10m') candles = candles.filter(c => c.t >= now - 60);
   else if (period === '1h') candles = candles.filter(c => c.t >= now - 360);
-  // 'all' = 전체
+  // 줌 적용: chartZoom > 1이면 전체 캔들 중 일부만 표시
+  if (chartZoom > 1 && candles.length > 4) {
+    const visible = Math.max(4, Math.floor(candles.length / chartZoom));
+    const maxOffset = candles.length - visible;
+    const startIdx = Math.round(chartOffsetPct * maxOffset);
+    candles = candles.slice(startIdx, startIdx + visible);
+  }
   return candles;
 }
 
@@ -1361,14 +1369,27 @@ function renderChartModalInner(ticker) {
     + '</div>';
   if (!isChart) return tabBar + renderDiscuss(ticker);
   return tabBar + `
-    <div class="chart-period-tabs">
-      <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','modal')">10분</button>
-      <button class="chart-period-tab ${chartPeriod==='1h'?'active':''}"  onclick="setChartPeriod('1h','${ticker}','modal')">1시간</button>
-      <button class="chart-period-tab ${chartPeriod==='all'?'active':''}" onclick="setChartPeriod('all','${ticker}','modal')">전체</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="chart-period-tabs" style="margin-bottom:0;">
+        <button class="chart-period-tab ${chartPeriod==='10m'?'active':''}" onclick="setChartPeriod('10m','${ticker}','modal')">10분</button>
+        <button class="chart-period-tab ${chartPeriod==='1h'?'active':''}"  onclick="setChartPeriod('1h','${ticker}','modal')">1시간</button>
+        <button class="chart-period-tab ${chartPeriod==='all'?'active':''}" onclick="setChartPeriod('all','${ticker}','modal')">전체</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button onclick="zoomChart(-1,'${ticker}','modal')" style="width:28px;height:28px;border-radius:6px;border:2px solid var(--border);background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;">−</button>
+        <span id="zoom-label" style="font-size:11px;color:var(--text2);min-width:28px;text-align:center;">${Math.round(chartZoom*100)}%</span>
+        <button onclick="zoomChart(1,'${ticker}','modal')" style="width:28px;height:28px;border-radius:6px;border:2px solid var(--border);background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;">+</button>
+      </div>
     </div>
     <div class="chart-wrap">
       <canvas id="modal-candle-canvas" class="chart-canvas" style="height:240px;width:100%;"></canvas>
       <canvas id="modal-vol-canvas"    class="chart-canvas" style="height:60px;width:100%;margin-top:4px;"></canvas>
+      <div id="chart-scroll-wrap" style="display:${chartZoom>1?'block':'none'};margin-top:6px;">
+        <input type="range" id="chart-offset-slider" min="0" max="100" value="${Math.round(chartOffsetPct*100)}"
+          style="width:100%;accent-color:#2266cc;"
+          oninput="onChartSlider(this.value,'${ticker}','modal')" />
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#aaa;margin-top:2px;"><span>← 과거</span><span>현재 →</span></div>
+      </div>
     </div>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text2)">거래</div>
@@ -1512,7 +1533,7 @@ window.sendAiMsg = async function() {
   ];
 
   try {
-    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + GEMINI_API_KEY;
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY;
     console.log('Calling Gemini API...');
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -1558,10 +1579,33 @@ function addAiMessage(role, text, id, isThinking) {
   container.scrollTop = container.scrollHeight;
 }
 
+
+// ── 차트 줌 ──────────────────────────────────────────
+window.zoomChart = function(dir, ticker, mode) {
+  const steps = [0.5, 1.0, 2.0, 4.0, 8.0];
+  const cur = steps.findIndex(s => Math.abs(s - chartZoom) < 0.01);
+  const next = Math.max(0, Math.min(steps.length - 1, (cur === -1 ? 1 : cur) + dir));
+  chartZoom = steps[next];
+  if (chartZoom <= 1) chartOffsetPct = 0;
+  // 재렌더
+  const panel = document.getElementById('modal-chart-panel');
+  if (panel) {
+    panel.innerHTML = renderChartModalInner(ticker);
+    setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 30);
+  }
+};
+
+window.onChartSlider = function(val, ticker, mode) {
+  chartOffsetPct = parseInt(val) / 100;
+  setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 10);
+};
+
 function closeChartModal() {
   document.getElementById('chart-modal-root')?.remove();
   chartModalTicker = null;
   chartModalView = 'chart';
+  chartZoom = 1.0;
+  chartOffsetPct = 0;
 }
 window.closeChartModal    = closeChartModal;
 
