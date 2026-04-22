@@ -42,7 +42,7 @@ body{background:var(--bg);color:var(--text);font-family:'SeoulNamsan',sans-serif
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
 .status-dot.open{background:var(--green);box-shadow:0 0 6px var(--green);}
 .login-screen{padding:40px 0;}
-.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;max-width:380px;margin:0 auto;}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;max-width:380px;margin:0 auto;overflow-y:auto;max-height:90vh;}
 .login-card h2{font-size:18px;font-weight:700;margin-bottom:8px;}
 .login-card p{font-size:13px;color:var(--text2);margin-bottom:24px;}
 .login-card select{width:100%;padding:10px 14px;font-size:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:'SeoulNamsan',sans-serif;margin-bottom:12px;outline:none;}
@@ -1402,10 +1402,11 @@ window.bindDiscussEvents = bindDiscussEvents;
 
 
 window.deleteDiscussMsg = async function(ticker, msgId) {
-  if (!confirm('이 메시지를 삭제하시겠습니까?')) return;
   try {
-    await update(ref(db, 'state/discuss/' + ticker), { [msgId]: null });
-    showToast('메시지가 삭제됐어요', 'info');
+    // Firebase에서 해당 메시지 null로 설정 (삭제)
+    const dbRef = ref(db, 'state/discuss/' + ticker + '/' + msgId);
+    await set(dbRef, null);
+    showToast('메시지가 삭제됐어요 🗑', 'info');
     // 토론방 뷰면 즉시 갱신
     if (chartModalTicker && chartModalView === 'discuss') {
       const panel = document.getElementById('modal-chart-panel');
@@ -1418,7 +1419,7 @@ window.deleteDiscussMsg = async function(ticker, msgId) {
     if (activeTab === 'portfolio') renderCurrentTab();
   } catch(e) {
     console.error('삭제 오류:', e);
-    showToast('삭제 중 오류가 발생했어요', 'error');
+    showToast('삭제 오류: ' + e.message, 'error');
   }
 };
 
