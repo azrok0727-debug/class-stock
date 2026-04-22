@@ -839,16 +839,23 @@ function subscribeState() {
       );
       // 수량 입력창에 포커스 있으면 거래 패널만 보호
       const isQtyInput = focused?.id === 'trade-qty' || focused?.id === 'modal-trade-qty';
+      const isDiscussInput = focused?.id === 'discuss-input';
+      const isAiInput = focused?.id === 'ai-input';
 
-      if (!isQtyInput) {
-        // 거래 수량 임시 저장
-        const savedQty = document.getElementById('trade-qty')?.value
-          || document.getElementById('modal-trade-qty')?.value;
+      if (!isQtyInput && !isDiscussInput && !isAiInput) {
+        // 입력값 임시 저장
+        const savedQty      = document.getElementById('trade-qty')?.value
+                           || document.getElementById('modal-trade-qty')?.value;
+        const savedDiscuss  = document.getElementById('discuss-input')?.value;
         renderCurrentTab();
-        // 수량 복원
+        // 값 복원
         if (savedQty) {
-          const qtyEl = document.getElementById('trade-qty') || document.getElementById('modal-trade-qty');
-          if (qtyEl) qtyEl.value = savedQty;
+          const el = document.getElementById('trade-qty') || document.getElementById('modal-trade-qty');
+          if (el) el.value = savedQty;
+        }
+        if (savedDiscuss) {
+          const el = document.getElementById('discuss-input');
+          if (el) el.value = savedDiscuss;
         }
       }
       refreshPcChart();
