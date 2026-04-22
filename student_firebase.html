@@ -1600,6 +1600,18 @@ window.openChartModal = function openChartModal(ticker) {
   document.body.appendChild(modal);
   selectedStock = ticker;
   activeTradeType = 'buy';
+
+  // 이벤트 위임으로 모달 버튼 처리
+  modal.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-modal-action]');
+    if (!btn) return;
+    var action = btn.dataset.modalAction;
+    var tk = btn.dataset.ticker;
+    if (action === 'modal-trade') executeModalTrade(tk);
+    else if (action === 'modal-limit') placeModalLimitOrder(tk);
+    else if (action === 'max') setModalMaxQty(tk);
+  });
+
   setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 50);
 }
 
@@ -1797,7 +1809,6 @@ function renderTradePanelContent(ticker) {
   const isBuy = activeTradeType === 'buy';
   const isLimit = activeOrderType === 'limit';
   const usePrice = (isLimit && limitPrice > 0) ? limitPrice : price;
-  const t = JSON.stringify(ticker);
 
   // 대기 중인 지정가 주문
   const orders = fbState.limitOrders?.[currentUser] ?? {};
@@ -1807,24 +1818,28 @@ function renderTradePanelContent(ticker) {
     pendingHtml += '<div style="margin-top:8px;">';
     pendingHtml += '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;">⏳ 대기 중인 지정가 주문</div>';
     myOrders.forEach(function(o) {
-      const side = o.side === 'buy' ? '매수' : '매도';
-      const color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
+      var side = o.side === 'buy' ? '매수' : '매도';
+      var color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
+      var safeId = o.id.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var safeTk = ticker.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       pendingHtml += '<div class="pending-order-item">';
-      pendingHtml += '<span style="color:' + color + ';font-weight:700;">' + side + '</span>';
-      pendingHtml += '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>';
-      pendingHtml += '<button class="pending-order-cancel" onclick="cancelLimitOrder(' + JSON.stringify(o.id) + ')">취소</button>';
+      pendingHtml += '<span style="color:'+color+';font-weight:700;">'+side+'</span>';
+      pendingHtml += '<span>'+o.qty+'주 @ '+fmtF(o.limitPrice)+'점</span>';
+      pendingHtml += '<button class="pending-order-cancel" onclick="cancelLimitOrder(\''+safeId+'\')">취소</button>';
       pendingHtml += '</div>';
     });
     pendingHtml += '</div>';
   }
 
-  const orderTabHtml =
+  var tk = ticker.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+  var orderTabHtml =
     '<div class="order-type-tabs">' +
-    '<button class="order-type-tab' + (!isLimit?' active':'') + '" onclick="setModalOrderType(\'market\',' + t + ')">시장가</button>' +
-    '<button class="order-type-tab' + (isLimit?' active':'') + '" onclick="setModalOrderType(\'limit\',' + t + ')">지정가</button>' +
+    '<button class="order-type-tab' + (!isLimit?' active':'') + '" onclick="setModalOrderType(\'market\',\''+tk+'\')">시장가</button>' +
+    '<button class="order-type-tab' + (isLimit?' active':'') + '" onclick="setModalOrderType(\'limit\',\''+tk+'\')">지정가</button>' +
     '</div>';
 
-  const limitPriceHtml = isLimit
+  var limitPriceHtml = isLimit
     ? '<div class="trade-row"><label>지정가</label>' +
       '<input type="number" id="modal-limit-price" min="1" step="0.1" value="' + (limitPrice||fmtF(price)) + '" ' +
       'style="flex:1;padding:8px 12px;background:var(--bg3);border:2px solid var(--blue);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;outline:none;" ' +
@@ -1832,18 +1847,24 @@ function renderTradePanelContent(ticker) {
       '<span style="font-size:12px;color:var(--text2);">점</span></div>'
     : '';
 
-  const btnLabel = !fbState.marketOpen ? '🔒 폐장 중'
+  var btnLabel = !fbState.marketOpen ? '🔒 폐장 중'
     : isLimit ? (isBuy ? '📋 매수 등록' : '📋 매도 등록')
     : (isBuy ? '주식 구매하기' : '주식 판매하기');
-  const btnClick = isLimit ? 'placeModalLimitOrder(' + t + ')' : 'executeModalTrade(' + t + ')';
+
+  var btnClass = 'btn-trade ' + (isBuy?'buy':'sell');
+  var btnDisabled = !fbState.marketOpen ? 'disabled' : '';
+
+  // 버튼 onclick을 data-action으로 처리 (이벤트 위임)
+  var btnAction = isLimit ? 'modal-limit' : 'modal-trade';
 
   return orderTabHtml +
     '<div class="trade-row"><label>현재가</label><span style="font-size:14px;font-weight:700;">' + fmtF(price) + '점</span></div>' +
     limitPriceHtml +
     '<div class="trade-row">' +
       '<label>수량</label>' +
-      '<input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" oninput="updateModalTradeTotal(' + t + ')" />' +
-      '<button onclick="setModalMaxQty(' + t + ')" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button>' +
+      '<input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" ' +
+        'oninput="updateModalTradeTotal(\''+tk+'\')" />' +
+      '<button data-modal-action="max" data-ticker="'+tk+'" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button>' +
     '</div>' +
     '<div class="trade-summary">' +
       '<div class="row"><span>보유 예금</span><span>' + fmt(stu.deposit) + '점</span></div>' +
@@ -1852,7 +1873,7 @@ function renderTradePanelContent(ticker) {
       '<div class="row"><span>주문 유형</span><span>' + (isLimit ? '지정가 ' + fmtF(usePrice) + '점' : '시장가') + '</span></div>' +
       '<div class="row"><span>' + (isBuy?'예상 구매':'예상 판매') + ' 금액</span><span id="modal-trade-total">' + fmtF(usePrice) + '점</span></div>' +
     '</div>' +
-    '<button class="btn-trade ' + (isBuy?'buy':'sell') + '" onclick="' + btnClick + '" ' + (!fbState.marketOpen?'disabled':'') + '>' + btnLabel + '</button>' +
+    '<button class="' + btnClass + '" data-modal-action="' + btnAction + '" data-ticker="' + tk + '" ' + btnDisabled + '>' + btnLabel + '</button>' +
     pendingHtml;
 }
 window.updateModalTradeTotal = function updateModalTradeTotal(ticker) {
