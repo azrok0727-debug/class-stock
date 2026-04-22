@@ -1310,6 +1310,41 @@ window.setChartPeriod = function setChartPeriod(p, ticker, mode) {
 // ── 모바일 차트 모달 ─────────────────────────────────
 
 // ── 토론방 ──────────────────────────────────────────────
+
+window.setModalOrderType = function(type, ticker) {
+  activeOrderType = type;
+  if (type === 'limit') limitPrice = fbState.prices?.[ticker] ?? 0;
+  const panel = document.getElementById('modal-chart-panel');
+  if (panel) {
+    panel.innerHTML = renderChartModalInner(ticker);
+    setTimeout(() => bindDiscussEvents(ticker), 30);
+  }
+};
+
+window.onModalLimitChange = function(val) {
+  limitPrice = parseFloat(val) || 0;
+};
+
+window.placeModalLimitOrder = async function(ticker) {
+  const qty = parseInt(document.getElementById('modal-trade-qty')?.value) || 0;
+  const lp  = parseFloat(document.getElementById('modal-limit-price')?.value) || limitPrice;
+  if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
+  if (lp <= 0)  return showToast('지정가를 입력해주세요', 'error');
+  const stu   = fbState.students[currentUser];
+  const isBuy = activeTradeType === 'buy';
+  if (isBuy && lp * qty > stu.deposit) return showToast('예금이 부족합니다', 'error');
+  if (!isBuy && (stu.holdings?.[ticker] ?? 0) < qty) return showToast('보유 수량이 부족합니다', 'error');
+  const id = 'lo_' + Date.now();
+  const order = { id, ticker, side: activeTradeType, qty, limitPrice: lp, ts: Date.now() };
+  await update(ref(db, 'state/limitOrders/' + currentUser), { [id]: order });
+  showToast((isBuy?'매수':'매도') + ' 지정가 주문 등록! (' + fmtF(lp) + '점)', 'success');
+  const panel = document.getElementById('modal-chart-panel');
+  if (panel) {
+    panel.innerHTML = renderChartModalInner(ticker);
+    setTimeout(() => bindDiscussEvents(ticker), 30);
+  }
+};
+
 window.setModalView = function(view, ticker) {
   chartModalView = view;
   const panel = document.getElementById('modal-chart-panel');
@@ -1672,7 +1707,7 @@ window.setMobileTradeType = function setMobileTradeType(type, ticker) {
 // 거래 패널 내용만 (모달용)
 function renderTradePanelContent(ticker) {
   if (!currentUser || !fbState.marketOpen) {
-    return `<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px;">${!fbState.marketOpen?'🔒 폐장 중':'로그인 필요'}</div>`;
+    return '<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px;">' + (!fbState.marketOpen?'🔒 폐장 중':'로그인 필요') + '</div>';
   }
   const stock = getStocks().find(s => s.ticker === ticker);
   const stu   = fbState.students[currentUser];
@@ -1680,25 +1715,66 @@ function renderTradePanelContent(ticker) {
   const held  = stu.holdings?.[ticker] ?? 0;
   const avail = getAvailShares(ticker);
   const isBuy = activeTradeType === 'buy';
-  return `
-    <div class="trade-row"><label>현재가</label><span style="font-size:14px;font-weight:700;color:${stock?.color}">${fmtF(price)}점</span></div>
-    <div class="trade-row">
-      <label>수량</label>
-      <input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" oninput="updateModalTradeTotal('${ticker}')" />
-      <button onclick="setModalMaxQty('${ticker}')" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button>
-    </div>
-    <div class="trade-summary">
-      <div class="row"><span>보유 예금</span><span>${fmt(stu.deposit)}점</span></div>
-      <div class="row"><span>보유 수량</span><span>${held}주</span></div>
-      ${stock?.type==='base'?`<div class="row"><span>잔여 매물</span><span>${avail}주</span></div>`:''}
-      <div class="row"><span>${isBuy?'구매':'판매'} 금액</span><span id="modal-trade-total">${fmtF(price)}점</span></div>
-    </div>
-    <button class="btn-trade ${isBuy?'buy':'sell'}" onclick="executeModalTrade('${ticker}')">
-      ${isBuy?'주식 구매하기':'주식 판매하기'}
-    </button>
-  `;
-}
+  const isLimit = activeOrderType === 'limit';
+  const usePrice = (isLimit && limitPrice > 0) ? limitPrice : price;
+  const t = JSON.stringify(ticker);
 
+  // 대기 중인 지정가 주문
+  const orders = fbState.limitOrders?.[currentUser] ?? {};
+  const myOrders = Object.values(orders).filter(function(o){ return o && o.ticker === ticker; });
+  let pendingHtml = '';
+  if (myOrders.length) {
+    pendingHtml += '<div style="margin-top:8px;">';
+    pendingHtml += '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;">⏳ 대기 중인 지정가 주문</div>';
+    myOrders.forEach(function(o) {
+      const side = o.side === 'buy' ? '매수' : '매도';
+      const color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
+      pendingHtml += '<div class="pending-order-item">';
+      pendingHtml += '<span style="color:' + color + ';font-weight:700;">' + side + '</span>';
+      pendingHtml += '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>';
+      pendingHtml += '<button class="pending-order-cancel" onclick="cancelLimitOrder(' + JSON.stringify(o.id) + ')">취소</button>';
+      pendingHtml += '</div>';
+    });
+    pendingHtml += '</div>';
+  }
+
+  const orderTabHtml =
+    '<div class="order-type-tabs">' +
+    '<button class="order-type-tab' + (!isLimit?' active':'') + '" onclick="setModalOrderType(\'market\',' + t + ')">시장가</button>' +
+    '<button class="order-type-tab' + (isLimit?' active':'') + '" onclick="setModalOrderType(\'limit\',' + t + ')">지정가</button>' +
+    '</div>';
+
+  const limitPriceHtml = isLimit
+    ? '<div class="trade-row"><label>지정가</label>' +
+      '<input type="number" id="modal-limit-price" min="1" step="0.1" value="' + (limitPrice||fmtF(price)) + '" ' +
+      'style="flex:1;padding:8px 12px;background:var(--bg3);border:2px solid var(--blue);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;outline:none;" ' +
+      'oninput="onModalLimitChange(this.value)" />' +
+      '<span style="font-size:12px;color:var(--text2);">점</span></div>'
+    : '';
+
+  const btnLabel = !fbState.marketOpen ? '🔒 폐장 중'
+    : isLimit ? (isBuy ? '📋 매수 등록' : '📋 매도 등록')
+    : (isBuy ? '주식 구매하기' : '주식 판매하기');
+  const btnClick = isLimit ? 'placeModalLimitOrder(' + t + ')' : 'executeModalTrade(' + t + ')';
+
+  return orderTabHtml +
+    '<div class="trade-row"><label>현재가</label><span style="font-size:14px;font-weight:700;">' + fmtF(price) + '점</span></div>' +
+    limitPriceHtml +
+    '<div class="trade-row">' +
+      '<label>수량</label>' +
+      '<input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" oninput="updateModalTradeTotal(' + t + ')" />' +
+      '<button onclick="setModalMaxQty(' + t + ')" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button>' +
+    '</div>' +
+    '<div class="trade-summary">' +
+      '<div class="row"><span>보유 예금</span><span>' + fmt(stu.deposit) + '점</span></div>' +
+      '<div class="row"><span>보유 수량</span><span>' + held + '주</span></div>' +
+      (stock?.type==='base' ? '<div class="row"><span>잔여 매물</span><span>' + avail + '주</span></div>' : '') +
+      '<div class="row"><span>주문 유형</span><span>' + (isLimit ? '지정가 ' + fmtF(usePrice) + '점' : '시장가') + '</span></div>' +
+      '<div class="row"><span>' + (isBuy?'예상 구매':'예상 판매') + ' 금액</span><span id="modal-trade-total">' + fmtF(usePrice) + '점</span></div>' +
+    '</div>' +
+    '<button class="btn-trade ' + (isBuy?'buy':'sell') + '" onclick="' + btnClick + '" ' + (!fbState.marketOpen?'disabled':'') + '>' + btnLabel + '</button>' +
+    pendingHtml;
+}
 window.updateModalTradeTotal = function updateModalTradeTotal(ticker) {
   const qty = parseInt(document.getElementById('modal-trade-qty')?.value) || 0;
   const el  = document.getElementById('modal-trade-total');
@@ -2012,7 +2088,7 @@ window.cancelLimitOrder = async function(orderId) {
   renderCurrentTab();
 };
 
-async function placeLimitOrder() {
+window.placeLimitOrder = async function placeLimitOrder() {
   const qty        = parseInt(document.getElementById('trade-qty')?.value) || 0;
   const lp         = parseFloat(document.getElementById('limit-price-input')?.value) || 0;
   if (qty <= 0)    return showToast('수량을 입력해주세요', 'error');
