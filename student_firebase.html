@@ -2489,13 +2489,16 @@ function renderPortfolio() {
   const stocks = getStocks();
   const held   = stocks.filter(s => (stu.holdings?.[s.ticker] ?? 0) > 0);
   const closed = !fbState.marketOpen;
+  const isTeacher = (currentUser === TEACHER_ACCOUNT.name);
+  const pwSection = renderChangePw();
+  const discussAdmin = isTeacher ? renderDiscussAdmin() : '';
 
-  if (held.length === 0) return `
+  if (held.length === 0) return discussAdmin + pwSection + `
     ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
     <div class="empty"><div class="empty-icon">📦</div>보유 종목이 없습니다.<br>시장 탭에서 주식을 구매해보세요!</div>`;
 
   const stockVal = held.reduce((sum, s) => sum + (stu.holdings[s.ticker] ?? 0) * (fbState.prices?.[s.ticker] ?? 0), 0);
-  return `
+  return discussAdmin + pwSection + `
     ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
     <div class="metrics">
       <div class="metric"><div class="metric-label">주식 평가액</div><div class="metric-value blue">${fmt(stockVal)}점</div></div>
