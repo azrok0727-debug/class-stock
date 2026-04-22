@@ -219,7 +219,7 @@ canvas.chart-canvas{display:block;width:100%;}
 .marquee-wrap{overflow:hidden;background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 0;white-space:nowrap;}
 .marquee-inner{display:inline-block;animation:marquee-scroll 30s linear infinite;}
 .marquee-inner:hover{animation-play-state:paused;}
-@keyframes marquee-scroll{0%{transform:translateX(100vw);}100%{transform:translateX(-100%);}}
+@keyframes marquee-scroll{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
 .marquee-item{display:inline-block;color:#ff00cc;font-size:13px;font-weight:500;margin-right:80px;}
 .section-title:first-child{margin-top:0;}
 /* ── 스플래시 스크린 ── */
@@ -1667,11 +1667,7 @@ window.openAiAssistant = function(ticker) {
 
     <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
       <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
-    </div>  `;
-  modal.addEventListener('click', e => {
-    if (e.target === modal) modal.remove();
-    if (e.target.dataset.action === 'close-profit') modal.remove();
-  });
+    </div>`;
   document.body.appendChild(modal);
   aiMessages = [];
 };
@@ -1998,7 +1994,8 @@ function updateNoticeBar() {
   bar.style.display = 'block';
   const sorted = [...notices].sort((a,b) => (a.ts||0)-(b.ts||0));
   const items = sorted.map(n => `<span class="marquee-item">📢 ${n.text}</span>`).join('');
-  bar.innerHTML = `<div class="marquee-wrap"><div class="marquee-inner">${items}${items}</div></div>`;
+  // 마퀴: 내용 2배 복사 + translateX(-50%) 애니메이션으로 끊김 없는 루프
+  bar.innerHTML = '<div class="marquee-wrap"><div class="marquee-inner">' + items + items + '</div></div>';
 }
 
 // ── PC 뉴스 사이드 패널 ──────────────────────────────
@@ -2748,7 +2745,10 @@ function renderNews() {
       <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text)">${n.title||''}</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.6;">${(n.body||'').replace(/\n/g,'<br>')}</div>
     </div>
-  `).join('')}</div>`;
+  `).join('')}</div>
+    <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
+      <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
+    </div>`;
 }
 
 window.doLogout = function() {
