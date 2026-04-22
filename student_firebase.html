@@ -1077,7 +1077,9 @@ function calcTotal(sname) {
   return (stu?.deposit ?? 0) + calcStockVal(sname);
 }
 function initVal(gid) {
+  if (!gid) return 1000; // 선생님 계정(group 0)
   const g = GROUPS.find(g => g.id === gid);
+  if (!g) return 1000;
   return 1000 + 100 * Math.floor(60 / g.members.length);
 }
 function getStocks() {
@@ -1662,8 +1664,14 @@ window.openAiAssistant = function(ticker) {
         <button class="ai-send" id="ai-send-btn" onclick="sendAiMsg()">전송</button>
       </div>
     </div>
-  `;
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
+      <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
+    </div>  `;
+  modal.addEventListener('click', e => {
+    if (e.target === modal) modal.remove();
+    if (e.target.dataset.action === 'close-profit') modal.remove();
+  });
   document.body.appendChild(modal);
   aiMessages = [];
 };
@@ -2462,6 +2470,73 @@ function renderDiscussAdmin() {
 }
 
 function renderChangePw() { return ''; }
+
+
+// ── 총 손익 확인 모달 ────────────────────────────────────
+window.showProfitModal = function() {
+  const stu   = fbState.students?.[currentUser] ?? {};
+  const hist  = stu.history ?? [];
+  const iv    = initVal(stu.group);
+  const total = calcTotal(currentUser);
+  const profit = total - iv;
+  const profitPct = ((profit / iv) * 100).toFixed(2);
+  const isUp = profit >= 0;
+
+  // 종목별 손익 계산
+  const tickerMap = {};
+  hist.forEach(h => {
+    if (!tickerMap[h.ticker]) tickerMap[h.ticker] = { bought: 0, sold: 0, bQty: 0, sQty: 0 };
+    if (h.type === 'buy')  { tickerMap[h.ticker].bought += h.total; tickerMap[h.ticker].bQty += h.qty; }
+    if (h.type === 'sell') { tickerMap[h.ticker].sold   += h.total; tickerMap[h.ticker].sQty += h.qty; }
+  });
+
+  const stocks = getStocks();
+  let tickerRows = '';
+  Object.entries(tickerMap).forEach(([ticker, d]) => {
+    const s = stocks.find(s => s.ticker === ticker);
+    const name = s?.name || ticker;
+    // 실현손익: 판매금액 - (판매수량 * 평균매수가)
+    const avgBuy = d.bQty > 0 ? d.bought / d.bQty : 0;
+    const realized = d.sold - (d.sQty * avgBuy);
+    // 평가손익: 보유수량 * (현재가 - 평균매수가)
+    const heldQty = (stu.holdings?.[ticker] ?? 0);
+    const curPrice = fbState.prices?.[ticker] ?? 0;
+    const unrealized = heldQty * (curPrice - avgBuy);
+    const rowProfit = realized + unrealized;
+    const rowUp = rowProfit >= 0;
+    if (d.bQty === 0 && d.sQty === 0) return;
+    tickerRows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">' +
+      '<div><div style="font-size:13px;font-weight:600;">' + name + '</div>' +
+      '<div style="font-size:11px;color:#999;">매수 ' + d.bQty + '주 / 매도 ' + d.sQty + '주 / 보유 ' + heldQty + '주</div></div>' +
+      '<div style="text-align:right;font-size:13px;font-weight:700;color:' + (rowUp?'var(--red)':'var(--blue)') + ';">' +
+        (rowUp?'+':'') + fmt(rowProfit) + '점' +
+      '</div>' +
+    '</div>';
+  });
+
+  document.getElementById('profit-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'profit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;display:flex;align-items:flex-end;';
+  modal.innerHTML =
+    '<div style="background:#faf8f3;width:100%;border-radius:20px 20px 0 0;border:2px solid var(--border);border-bottom:none;max-height:80vh;overflow-y:auto;padding:20px 16px 40px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+        '<div style="font-size:16px;font-weight:700;">📊 나의 총 손익</div>' +
+        '<button data-action="close-profit" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;">✕</button>' +
+      '</div>' +
+      '<div style="background:#fff;border:2px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;text-align:center;box-shadow:2px 2px 0 var(--border);">' +
+        '<div style="font-size:13px;color:#999;margin-bottom:6px;">총 손익 (초기자산 ' + fmt(iv) + '점 기준)</div>' +
+        '<div style="font-size:32px;font-weight:700;color:' + (isUp?'var(--red)':'var(--blue)') + ';">' + (isUp?'+':'') + fmt(profit) + '점</div>' +
+        '<div style="font-size:15px;color:' + (isUp?'var(--red)':'var(--blue)') + ';margin-top:4px;">' + (isUp?'+':'') + profitPct + '%</div>' +
+      '</div>' +
+      '<div style="background:#fff;border:2px solid var(--border);border-radius:12px;padding:14px;box-shadow:2px 2px 0 var(--border);">' +
+        '<div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#555;">📋 종목별 손익</div>' +
+        (tickerRows || '<div style="text-align:center;color:#ccc;padding:16px;">거래 내역이 없습니다</div>') +
+      '</div>' +
+    '</div>';
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+};
 
 window.doChangePwLogin = async function() {
   const name    = document.getElementById('pw-change-name')?.value;
