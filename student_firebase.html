@@ -885,13 +885,28 @@ function subscribeState() {
         }
       }
     } else {
-      // ── 로그인 화면: 드롭다운 선택 중이면 재렌더 안 함 ──
+      // ── 로그인 화면: 입력 중이면 재렌더 안 하고 값만 유지 ──
       const loginSelect = document.getElementById('login-select');
-      const isSelectOpen = loginSelect && document.activeElement === loginSelect;
-      const pwInput = document.getElementById('teacher-pw-input');
-      const isPwTyping = pwInput && document.activeElement === pwInput;
-      if (!isSelectOpen && !isPwTyping) {
+      const pwInput = document.getElementById('student-pw-input');
+      const savedName = loginSelect?.value || '';
+      const savedPw   = pwInput?.value || '';
+      const pwChangeName = document.getElementById('pw-change-name');
+      const pwOld  = document.getElementById('pw-old');
+      const pwNew1 = document.getElementById('pw-new1');
+      const pwNew2 = document.getElementById('pw-new2');
+      const anyFocused = document.activeElement === loginSelect ||
+                         document.activeElement === pwInput ||
+                         document.activeElement === pwChangeName ||
+                         document.activeElement === pwOld ||
+                         document.activeElement === pwNew1 ||
+                         document.activeElement === pwNew2;
+      if (!anyFocused) {
         renderMain();
+        // 선택값/비밀번호 복원
+        const newSel = document.getElementById('login-select');
+        const newPw  = document.getElementById('student-pw-input');
+        if (newSel && savedName) newSel.value = savedName;
+        if (newPw  && savedPw)   newPw.value  = savedPw;
       }
     }
   }, err => {
@@ -1112,7 +1127,17 @@ function renderLogin() {
         'style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;outline:none;box-sizing:border-box;" />' +
       '</div>' +
       '<button class="btn-primary" id="login-btn">입장하기</button>' +
-      '<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:10px;">비밀번호가 없는 학생은 초기 비밀번호: <b>1234</b></div>' +
+      '<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:8px;">초기 비밀번호: <b>1234</b></div>' +
+      '<hr style="border:none;border-top:1.5px solid var(--border);margin:14px 0;" />' +
+      '<div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text2);">🔒 비밀번호 변경</div>' +
+      '<select id="pw-change-name" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;">' +
+        '<option value="">— 이름 선택 —</option>' +
+        groupOptions +
+      '</select>' +
+      '<input type="password" id="pw-old" placeholder="현재 비밀번호" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;box-sizing:border-box;" />' +
+      '<input type="password" id="pw-new1" placeholder="새 비밀번호" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;box-sizing:border-box;" />' +
+      '<input type="password" id="pw-new2" placeholder="새 비밀번호 확인" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;box-sizing:border-box;" />' +
+      '<button onclick="doChangePwLogin()" style="width:100%;padding:10px;background:#555;color:#fff;border:2px solid var(--border);border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">비밀번호 변경</button>' +
     '</div>' +
   '</div>';
 }
@@ -1378,8 +1403,23 @@ window.bindDiscussEvents = bindDiscussEvents;
 
 window.deleteDiscussMsg = async function(ticker, msgId) {
   if (!confirm('이 메시지를 삭제하시겠습니까?')) return;
-  await update(ref(db, 'state/discuss/' + ticker), { [msgId]: null });
-  showToast('메시지가 삭제됐어요', 'info');
+  try {
+    await update(ref(db, 'state/discuss/' + ticker), { [msgId]: null });
+    showToast('메시지가 삭제됐어요', 'info');
+    // 토론방 뷰면 즉시 갱신
+    if (chartModalTicker && chartModalView === 'discuss') {
+      const panel = document.getElementById('modal-chart-panel');
+      if (panel) {
+        panel.innerHTML = renderChartModalInner(chartModalTicker);
+        setTimeout(() => bindDiscussEvents(chartModalTicker), 30);
+      }
+    }
+    // 관리자 내 재산 탭이면 갱신
+    if (activeTab === 'portfolio') renderCurrentTab();
+  } catch(e) {
+    console.error('삭제 오류:', e);
+    showToast('삭제 중 오류가 발생했어요', 'error');
+  }
 };
 
 window.sendDiscussMsg = async function(ticker) {
@@ -2384,6 +2424,24 @@ function renderChangePw() {
     '</div>' +
   '</div>';
 }
+
+window.doChangePwLogin = async function() {
+  const name    = document.getElementById('pw-change-name')?.value;
+  const oldPw   = document.getElementById('pw-old')?.value;
+  const newPw1  = document.getElementById('pw-new1')?.value;
+  const newPw2  = document.getElementById('pw-new2')?.value;
+  if (!name)  { showToast('이름을 선택해주세요', 'error'); return; }
+  if (!oldPw || !newPw1 || !newPw2) { showToast('모든 칸을 입력해주세요', 'error'); return; }
+  const savedPw = fbState.students?.[name]?.password ?? '1234';
+  if (oldPw !== savedPw) { showToast('현재 비밀번호가 틀렸습니다 ❌', 'error'); return; }
+  if (newPw1.length < 4) { showToast('비밀번호는 4자리 이상이어야 해요', 'error'); return; }
+  if (newPw1 !== newPw2) { showToast('새 비밀번호가 일치하지 않습니다', 'error'); return; }
+  await update(ref(db, 'state/students/' + name), { password: newPw1 });
+  showToast(name + '의 비밀번호가 변경됐어요! 🎉', 'success');
+  document.getElementById('pw-old').value = '';
+  document.getElementById('pw-new1').value = '';
+  document.getElementById('pw-new2').value = '';
+};
 
 window.doChangePw = async function() {
   const cur     = document.getElementById('pw-current')?.value;
