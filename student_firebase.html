@@ -2440,17 +2440,7 @@ function renderDiscussAdmin() {
   return html;
 }
 
-function renderChangePw() {
-  return '<div style="background:#fff;border:2px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:2px 2px 0 var(--border);">' +
-    '<div style="font-size:14px;font-weight:700;margin-bottom:12px;">🔒 비밀번호 변경</div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px;">' +
-      '<input type="password" id="pw-current" placeholder="현재 비밀번호" style="padding:9px 14px;background:#f5f5f5;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" />' +
-      '<input type="password" id="pw-new" placeholder="새 비밀번호" style="padding:9px 14px;background:#f5f5f5;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" />' +
-      '<input type="password" id="pw-confirm" placeholder="새 비밀번호 확인" style="padding:9px 14px;background:#f5f5f5;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" />' +
-      '<button onclick="doChangePw()" style="padding:10px;background:#2266cc;color:#fff;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">변경하기</button>' +
-    '</div>' +
-  '</div>';
-}
+function renderChangePw() { return ''; }
 
 window.doChangePwLogin = async function() {
   const name    = document.getElementById('pw-change-name')?.value;
@@ -2470,19 +2460,6 @@ window.doChangePwLogin = async function() {
   document.getElementById('pw-new2').value = '';
 };
 
-window.doChangePw = async function() {
-  const cur     = document.getElementById('pw-current')?.value;
-  const newPw   = document.getElementById('pw-new')?.value;
-  const confirm = document.getElementById('pw-confirm')?.value;
-  if (!cur || !newPw || !confirm) { showToast('모든 칸을 입력해주세요', 'error'); return; }
-  const savedPw = fbState.students?.[currentUser]?.password ?? '1234';
-  if (cur !== savedPw) { showToast('현재 비밀번호가 틀렸습니다', 'error'); return; }
-  if (newPw.length < 4) { showToast('비밀번호는 4자리 이상이어야 해요', 'error'); return; }
-  if (newPw !== confirm) { showToast('새 비밀번호가 일치하지 않습니다', 'error'); return; }
-  await update(ref(db, 'state/students/' + currentUser), { password: newPw });
-  showToast('비밀번호가 변경됐어요! 🎉', 'success');
-  renderCurrentTab();
-};
 
 function renderPortfolio() {
   const stu    = fbState.students[currentUser];
@@ -2490,15 +2467,14 @@ function renderPortfolio() {
   const held   = stocks.filter(s => (stu.holdings?.[s.ticker] ?? 0) > 0);
   const closed = !fbState.marketOpen;
   const isTeacher = (currentUser === TEACHER_ACCOUNT.name);
-  const pwSection = renderChangePw();
   const discussAdmin = isTeacher ? renderDiscussAdmin() : '';
 
-  if (held.length === 0) return discussAdmin + pwSection + `
+  if (held.length === 0) return discussAdmin + `
     ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
     <div class="empty"><div class="empty-icon">📦</div>보유 종목이 없습니다.<br>시장 탭에서 주식을 구매해보세요!</div>`;
 
   const stockVal = held.reduce((sum, s) => sum + (stu.holdings[s.ticker] ?? 0) * (fbState.prices?.[s.ticker] ?? 0), 0);
-  return discussAdmin + pwSection + `
+  return discussAdmin + `
     ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
     <div class="metrics">
       <div class="metric"><div class="metric-label">주식 평가액</div><div class="metric-value blue">${fmt(stockVal)}점</div></div>
