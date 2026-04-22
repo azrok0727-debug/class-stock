@@ -785,6 +785,7 @@ let currentUser = null;
 let activeTab  = 'market';
 let activeTradeType = 'buy';
 let activeOrderType = 'market'; // 'market' | 'limit'
+let loginView = 'login'; // 'login' | 'changepw'
 let limitPrice = 0; // 지정가
 let selectedStock   = null;
 let tickTimer  = null;
@@ -890,19 +891,12 @@ function subscribeState() {
       const pwInput = document.getElementById('student-pw-input');
       const savedName = loginSelect?.value || '';
       const savedPw   = pwInput?.value || '';
-      const pwChangeName = document.getElementById('pw-change-name');
-      const pwOld  = document.getElementById('pw-old');
-      const pwNew1 = document.getElementById('pw-new1');
-      const pwNew2 = document.getElementById('pw-new2');
+      // 비밀번호 변경 화면이면 재렌더 안 함
+      if (loginView === 'changepw') return;
       const anyFocused = document.activeElement === loginSelect ||
-                         document.activeElement === pwInput ||
-                         document.activeElement === pwChangeName ||
-                         document.activeElement === pwOld ||
-                         document.activeElement === pwNew1 ||
-                         document.activeElement === pwNew2;
+                         document.activeElement === document.getElementById('student-pw-input');
       if (!anyFocused) {
         renderMain();
-        // 선택값/비밀번호 복원
         const newSel = document.getElementById('login-select');
         const newPw  = document.getElementById('student-pw-input');
         if (newSel && savedName) newSel.value = savedName;
@@ -1127,20 +1121,48 @@ function renderLogin() {
         'style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;outline:none;box-sizing:border-box;" />' +
       '</div>' +
       '<button class="btn-primary" id="login-btn">입장하기</button>' +
-      '<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:8px;">초기 비밀번호: <b>1234</b></div>' +
-      '<hr style="border:none;border-top:1.5px solid var(--border);margin:14px 0;" />' +
-      '<div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text2);">🔒 비밀번호 변경</div>' +
-      '<select id="pw-change-name" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;">' +
-        '<option value="">— 이름 선택 —</option>' +
-        groupOptions +
-      '</select>' +
-      '<input type="password" id="pw-old" placeholder="현재 비밀번호" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;box-sizing:border-box;" />' +
-      '<input type="password" id="pw-new1" placeholder="새 비밀번호" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;box-sizing:border-box;" />' +
-      '<input type="password" id="pw-new2" placeholder="새 비밀번호 확인" style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px;outline:none;box-sizing:border-box;" />' +
-      '<button onclick="doChangePwLogin()" style="width:100%;padding:10px;background:#555;color:#fff;border:2px solid var(--border);border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">비밀번호 변경</button>' +
+      '<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:10px;">초기 비밀번호: <b>1234</b></div>' +
+      '<div style="text-align:center;margin-top:8px;">' +
+        '<button onclick="showChangePw()" style="background:none;border:none;cursor:pointer;font-size:11px;color:#aaa;font-family:inherit;text-decoration:underline;padding:4px;">비밀번호 변경</button>' +
+      '</div>' +
     '</div>' +
   '</div>';
 }
+
+function renderChangePwScreen() {
+  const groupOptions = GROUPS.map(g =>
+    '<optgroup label="' + g.name + '">' +
+    g.members.map(m => '<option value="' + m + '">' + m + '</option>').join('') +
+    '</optgroup>'
+  ).join('');
+  return '<div class="login-screen">' +
+    '<div class="login-card">' +
+      '<button onclick="hideChangePw()" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--blue);font-family:inherit;padding:0;margin-bottom:16px;display:block;font-weight:600;">← 뒤로</button>' +
+      '<div style="font-size:18px;font-weight:700;margin-bottom:18px;">🔒 비밀번호 변경</div>' +
+      '<select id="pw-change-name" style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;margin-bottom:10px;outline:none;">' +
+        '<option value="">— 이름 선택 —</option>' +
+        groupOptions +
+      '</select>' +
+      '<input type="password" id="pw-old" placeholder="현재 비밀번호" style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;" />' +
+      '<input type="password" id="pw-new1" placeholder="새 비밀번호 (4자 이상)" style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;" />' +
+      '<input type="password" id="pw-new2" placeholder="새 비밀번호 확인" style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;" />' +
+      '<button onclick="doChangePwLogin()" style="width:100%;padding:12px;background:#2266cc;color:#fff;border:2px solid var(--border);border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">변경하기</button>' +
+      '<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:10px;">초기 비밀번호: <b>1234</b></div>' +
+    '</div>' +
+  '</div>';
+}
+
+window.showChangePw = function() {
+  loginView = 'changepw';
+  const el = document.getElementById('main-content');
+  if (el) {
+    el.innerHTML = renderChangePwScreen();
+  }
+};
+window.hideChangePw = function() {
+  loginView = 'login';
+  renderMain();
+};
 
 
 
@@ -1466,8 +1488,10 @@ function renderDiscuss(ticker) {
       var bubbleClass = 'discuss-bubble' + (isMe ? ' mine' : '');
       var msgClass = 'discuss-msg' + (isMe ? ' mine' : '');
       var isTeacher = (currentUser === TEACHER_ACCOUNT.name);
+      var safeId = m.id.replace(/'/g, "\\'");
+      var safeTicker = ticker.replace(/'/g, "\\'");
       var deleteBtn = isTeacher
-        ? '<button onclick="deleteDiscussMsg(' + JSON.stringify(ticker) + ',' + JSON.stringify(m.id) + ')" ' +
+        ? '<button onclick="deleteDiscussMsg(\''+safeTicker+'\',\''+safeId+'\');" ' +
           'style="background:none;border:none;cursor:pointer;font-size:11px;color:#e03030;padding:2px 4px;margin-top:2px;font-family:inherit;">🗑 삭제</button>'
         : '';
       msgHtml += '<div class="' + msgClass + '">' +
@@ -2404,7 +2428,9 @@ function renderDiscussAdmin() {
       html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#fff;border:1px solid #eee;border-radius:6px;margin-bottom:3px;font-size:12px;">';
       html += '<span style="color:#888;">' + m.author + '</span>';
       html += '<span style="flex:1;margin:0 8px;color:#333;">' + m.text + '</span>';
-      html += '<button onclick="deleteDiscussMsg(' + JSON.stringify(s.ticker) + ',' + JSON.stringify(m.id) + ')" style="padding:2px 8px;background:#fce4ec;border:1px solid #e03030;border-radius:4px;color:#e03030;cursor:pointer;font-size:11px;font-family:inherit;">삭제</button>';
+      var safeAdminId = m.id.replace(/'/g, "\'");
+      var safeAdminTicker = s.ticker.replace(/'/g, "\'");
+      html += '<button onclick="deleteDiscussMsg(\''+safeAdminTicker+'\',\''+safeAdminId+'\')" style="padding:2px 8px;background:#fce4ec;border:1px solid #e03030;border-radius:4px;color:#e03030;cursor:pointer;font-size:11px;font-family:inherit;">삭제</button>';
       html += '</div>';
     });
     html += '</div>';
