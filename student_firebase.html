@@ -1986,18 +1986,19 @@ function renderPendingOrders(ticker) {
   const orders = fbState.limitOrders?.[currentUser] ?? {};
   const myOrders = Object.values(orders).filter(o => o && o.ticker === ticker);
   if (!myOrders.length) return '';
-  return '<div class="pending-orders">' +
-    '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;">⏳ 대기 중인 지정가 주문</div>' +
-    myOrders.map(o => {
-      const side = o.side === 'buy' ? '매수' : '매도';
-      const color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
-      return '<div class="pending-order-item">' +
-        '<span style="color:' + color + ';font-weight:700;">' + side + '</span>' +
-        '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>' +
-        '<button class="pending-order-cancel" onclick="cancelLimitOrder('' + o.id + '')">취소</button>' +
-      '</div>';
-    }).join('') +
-  '</div>';
+  let html = '<div class="pending-orders">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;">⏳ 대기 중인 지정가 주문</div>';
+  myOrders.forEach(function(o) {
+    const side = o.side === 'buy' ? '매수' : '매도';
+    const color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
+    html += '<div class="pending-order-item">';
+    html += '<span style="color:' + color + ';font-weight:700;">' + side + '</span>';
+    html += '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>';
+    html += '<button class="pending-order-cancel" onclick="cancelLimitOrder(' + JSON.stringify(o.id) + ')">취소</button>';
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
 }
 
 window.cancelLimitOrder = async function(orderId) {
