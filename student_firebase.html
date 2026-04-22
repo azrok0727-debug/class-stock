@@ -1664,10 +1664,7 @@ window.openAiAssistant = function(ticker) {
         <button class="ai-send" id="ai-send-btn" onclick="sendAiMsg()">전송</button>
       </div>
     </div>
-
-    <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
-      <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
-    </div>`;
+`;
   document.body.appendChild(modal);
   aiMessages = [];
 };
@@ -1994,8 +1991,11 @@ function updateNoticeBar() {
   bar.style.display = 'block';
   const sorted = [...notices].sort((a,b) => (a.ts||0)-(b.ts||0));
   const items = sorted.map(n => `<span class="marquee-item">📢 ${n.text}</span>`).join('');
-  // 마퀴: 내용 2배 복사 + translateX(-50%) 애니메이션으로 끊김 없는 루프
-  bar.innerHTML = '<div class="marquee-wrap"><div class="marquee-inner">' + items + items + '</div></div>';
+  // 이미 같은 내용이면 재렌더 안 함 (애니메이션 끊김 방지)
+  const newContent = items + items;
+  const existing = bar.querySelector('.marquee-inner');
+  if (existing && existing.innerHTML === newContent) return;
+  bar.innerHTML = '<div class="marquee-wrap"><div class="marquee-inner">' + newContent + '</div></div>';
 }
 
 // ── PC 뉴스 사이드 패널 ──────────────────────────────
@@ -2608,6 +2608,9 @@ function renderPortfolio() {
           </div>` : ''}
         </div>`;
     }).join('')}
+    </div>
+    <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
+      <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
     </div>`;
 }
 
