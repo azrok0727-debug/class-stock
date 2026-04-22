@@ -639,6 +639,14 @@ canvas.chart-canvas{display:block;width:100%;}
 .discuss-send-btn:active{transform:translate(1px,1px);box-shadow:none;}
 .discuss-empty{text-align:center;padding:28px 0;color:#ccc;font-size:13px;line-height:1.8;}
 
+
+/* ── 지정가 주문 ── */
+.order-type-tabs{display:flex;gap:6px;margin-bottom:12px;}
+.order-type-tab{flex:1;padding:6px;font-size:12px;font-weight:700;border-radius:var(--radius);border:2px solid var(--border);background:transparent;cursor:pointer;font-family:'SeoulNamsan',sans-serif;color:var(--text2);transition:all 0.15s;}
+.order-type-tab.active{background:#fff;color:var(--text);box-shadow:2px 2px 0 var(--border);}
+.pending-orders{margin-top:8px;}
+.pending-order-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#fff;border:1.5px solid var(--border);border-radius:8px;margin-bottom:5px;font-size:12px;}
+.pending-order-cancel{padding:3px 8px;background:transparent;border:1.5px solid #e03030;border-radius:6px;color:#e03030;cursor:pointer;font-size:11px;font-family:inherit;}
 </style>
 </head>
 <body>
@@ -776,6 +784,8 @@ let fbState    = null;   // Firebase에서 받은 전체 state
 let currentUser = null;
 let activeTab  = 'market';
 let activeTradeType = 'buy';
+let activeOrderType = 'market'; // 'market' | 'limit'
+let limitPrice = 0; // 지정가
 let selectedStock   = null;
 let tickTimer  = null;
 
@@ -1016,6 +1026,8 @@ function startPriceTick() {
         }
       });
     });
+    // 지정가 체결 체크
+    await checkLimitOrders();
     await update(ref(db), updates);
   }, 10000);
 }
@@ -1968,6 +1980,84 @@ function renderMarket() {
   return `<div class="market-grid"><div class="market-left">${stockList}</div>${rightPanel}</div>`;
 }
 
+
+// ── 지정가 주문 ──────────────────────────────────────
+function renderPendingOrders(ticker) {
+  const orders = fbState.limitOrders?.[currentUser] ?? {};
+  const myOrders = Object.values(orders).filter(o => o && o.ticker === ticker);
+  if (!myOrders.length) return '';
+  return '<div class="pending-orders">' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;">⏳ 대기 중인 지정가 주문</div>' +
+    myOrders.map(o => {
+      const side = o.side === 'buy' ? '매수' : '매도';
+      const color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
+      return '<div class="pending-order-item">' +
+        '<span style="color:' + color + ';font-weight:700;">' + side + '</span>' +
+        '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>' +
+        '<button class="pending-order-cancel" onclick="cancelLimitOrder('' + o.id + '')">취소</button>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+window.cancelLimitOrder = async function(orderId) {
+  await update(ref(db, 'state/limitOrders/' + currentUser), { [orderId]: null });
+  renderCurrentTab();
+};
+
+async function placeLimitOrder() {
+  const qty        = parseInt(document.getElementById('trade-qty')?.value) || 0;
+  const lp         = parseFloat(document.getElementById('limit-price-input')?.value) || 0;
+  if (qty <= 0)    return showToast('수량을 입력해주세요', 'error');
+  if (lp <= 0)     return showToast('지정가를 입력해주세요', 'error');
+  const stu        = fbState.students[currentUser];
+  const isBuy      = activeTradeType === 'buy';
+  if (isBuy && lp * qty > stu.deposit) return showToast('예금이 부족합니다', 'error');
+  if (!isBuy && (stu.holdings?.[selectedStock] ?? 0) < qty) return showToast('보유 수량이 부족합니다', 'error');
+  const id = 'lo_' + Date.now();
+  const order = { id, ticker: selectedStock, side: activeTradeType, qty, limitPrice: lp, ts: Date.now() };
+  await update(ref(db, 'state/limitOrders/' + currentUser), { [id]: order });
+  showToast((isBuy ? '매수' : '매도') + ' 지정가 주문이 등록됐어요! (' + fmtF(lp) + '점)', 'success');
+  renderCurrentTab();
+}
+
+// 지정가 체결 체크 (10초 틱에서 호출)
+async function checkLimitOrders() {
+  const allOrders = fbState.limitOrders ?? {};
+  const updates = {};
+  for (const [userId, userOrders] of Object.entries(allOrders)) {
+    if (!userOrders) continue;
+    for (const [orderId, order] of Object.entries(userOrders)) {
+      if (!order) continue;
+      const curPrice = fbState.prices?.[order.ticker] ?? 0;
+      const triggered = order.side === 'buy'
+        ? curPrice <= order.limitPrice   // 매수: 현재가가 지정가 이하로 내려오면
+        : curPrice >= order.limitPrice;  // 매도: 현재가가 지정가 이상으로 오르면
+      if (!triggered) continue;
+      // 체결 처리
+      const stu = fbState.students?.[userId];
+      if (!stu) continue;
+      const total = order.qty * curPrice;
+      if (order.side === 'buy') {
+        if (stu.deposit < total) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
+        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit - total) * 100) / 100;
+        const newHeld = (stu.holdings?.[order.ticker] ?? 0) + order.qty;
+        updates['state/students/' + userId + '/holdings/' + order.ticker] = newHeld;
+      } else {
+        const held = stu.holdings?.[order.ticker] ?? 0;
+        if (held < order.qty) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
+        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit + total) * 100) / 100;
+        updates['state/students/' + userId + '/holdings/' + order.ticker] = held - order.qty;
+      }
+      // 거래내역 추가
+      const hist = [...(stu.history ?? []), { type: order.side, ticker: order.ticker, qty: order.qty, price: curPrice, total, date: new Date().toLocaleString('ko-KR'), isLimit: true }];
+      updates['state/students/' + userId + '/history'] = hist;
+      updates['state/limitOrders/' + userId + '/' + orderId] = null;
+    }
+  }
+  if (Object.keys(updates).length > 0) await update(ref(db), updates);
+}
+
 function renderTradePanel() {
   if (!selectedStock) return '';
   const stock = getStocks().find(s => s.ticker === selectedStock);
@@ -1987,7 +2077,17 @@ function renderTradePanel() {
         <button class="trade-tab buy${isBuy?' active':''}" data-tt="buy">살게요</button>
         <button class="trade-tab sell${!isBuy?' active':''}" data-tt="sell">팔게요</button>
       </div>
+      <div class="order-type-tabs">
+        <button class="order-type-tab${activeOrderType==='market'?' active':''}" data-ot="market">시장가</button>
+        <button class="order-type-tab${activeOrderType==='limit'?' active':''}" data-ot="limit">지정가</button>
+      </div>
       <div class="trade-row"><label>현재가</label><span style="font-size:15px;font-weight:700;color:${(()=>{const p=pctChange(selectedStock);return p>0?'var(--red)':p<0?'var(--blue)':'var(--text)'})()}">${fmtF(price)}점</span></div>
+      ${activeOrderType==='limit' ? `
+      <div class="trade-row">
+        <label>지정가</label>
+        <input type="number" id="limit-price-input" min="1" step="0.1" value="${limitPrice||fmtF(price)}" style="flex:1;padding:8px 12px;background:var(--bg3);border:2px solid var(--blue);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'SeoulNamsan',sans-serif;outline:none;" />
+        <span style="font-size:12px;color:var(--text2);">점</span>
+      </div>` : ''}
       <div class="trade-row">
         <label>수량</label>
         <input type="number" id="trade-qty" min="1" max="${isBuy?maxB:maxS}" value="1" />
@@ -1997,11 +2097,17 @@ function renderTradePanel() {
         <div class="row"><span>보유 예금</span><span>${fmt(stu.deposit)}점</span></div>
         <div class="row"><span>보유 수량</span><span>${held}주</span></div>
         ${stock.type==='base' ? `<div class="row"><span>잔여 매물</span><span>${avail}주</span></div>` : ''}
-        <div class="row"><span>${isBuy?'구매':'판매'} 금액</span><span id="trade-total">${fmtF(price)}점</span></div>
+        <div class="row"><span>주문 유형</span><span>${activeOrderType==='market'?'시장가':'지정가 '+fmtF(limitPrice||price)+'점'}</span></div>
+        <div class="row"><span>${isBuy?'예상 구매':'예상 판매'} 금액</span><span id="trade-total">${fmtF((limitPrice&&activeOrderType==='limit'?limitPrice:price)*1)}점</span></div>
       </div>
+      ${activeOrderType==='limit' ? `
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;padding:6px 8px;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;">
+        💡 지정가 주문은 현재가가 설정 가격에 도달하면 자동으로 체결돼요
+      </div>` : ''}
       <button class="btn-trade ${isBuy?'buy':'sell'}" id="btn-execute" ${!fbState.marketOpen?'disabled':''}>
-        ${!fbState.marketOpen ? '🔒 폐장 중' : (isBuy ? '주식 구매하기' : '주식 판매하기')}
+        ${!fbState.marketOpen ? '🔒 폐장 중' : (activeOrderType==='limit' ? (isBuy?'📋 지정가 매수 등록':'📋 지정가 매도 등록') : (isBuy ? '주식 구매하기' : '주식 판매하기'))}
       </button>
+      ${renderPendingOrders(selectedStock)}
     </div>`;
 }
 
@@ -2032,14 +2138,32 @@ function attachTabListeners() {
   document.getElementById('btn-max')?.addEventListener('click', () => {
     if (!selectedStock) return;
     const stu   = fbState.students[currentUser];
-    const price = fbState.prices?.[selectedStock] ?? 1;
+    const usePrice = (activeOrderType === 'limit' && limitPrice > 0) ? limitPrice : (fbState.prices?.[selectedStock] ?? 1);
     const held  = stu.holdings?.[selectedStock] ?? 0;
     const avail = getAvailShares(selectedStock);
-    const max   = activeTradeType === 'buy' ? Math.min(Math.floor(stu.deposit / price), avail) : held;
+    const max   = activeTradeType === 'buy' ? Math.min(Math.floor(stu.deposit / usePrice), avail) : held;
     if (qtyEl) { qtyEl.value = max; updateTradeTotal(); }
   });
+  // 주문 유형 탭
+  document.querySelectorAll('.order-type-tab[data-ot]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeOrderType = btn.dataset.ot;
+      if (activeOrderType === 'limit') {
+        limitPrice = fbState.prices?.[selectedStock] ?? 0;
+      }
+      renderCurrentTab();
+    });
+  });
+  // 지정가 입력 변경 시
+  document.getElementById('limit-price-input')?.addEventListener('input', function() {
+    limitPrice = parseFloat(this.value) || 0;
+    updateTradeTotal();
+  });
   // execute button
-  document.getElementById('btn-execute')?.addEventListener('click', executeTrade);
+  document.getElementById('btn-execute')?.addEventListener('click', () => {
+    if (activeOrderType === 'limit') placeLimitOrder();
+    else executeTrade();
+  });
   // portfolio quick trade
   document.querySelectorAll('[data-quick-ticker]').forEach(btn => {
     btn.addEventListener('click', () => {
