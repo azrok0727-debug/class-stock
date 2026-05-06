@@ -1248,12 +1248,12 @@ const db  = getDatabase(app);
 
 // ── 상수 ───────────────────────────────────────────────
 const GROUPS = [
-  { id:1, name:'1모둠', members:['김수현','주시연','신재은','이주호'] },
-  { id:2, name:'2모둠', members:['이세은','이서준','이다영','박준서'] },
-  { id:3, name:'3모둠', members:['정서윤','조혜원','임승언','김지성'] },
-  { id:4, name:'4모둠', members:['황세현','김지원','김주이','이강민'] },
-  { id:5, name:'5모둠', members:['강민채','서은수','최상윤','최효민','이윤아'] },
-  { id:6, name:'6모둠', members:['김준우','민나진','윤지환','이수빈','권용민'] },
+  { id:1, name:'1모둠', members:['주시연','김지성','신재은','서은수'] },
+  { id:2, name:'2모둠', members:['강민채','권용민','이다영','김준우'] },
+  { id:3, name:'3모둠', members:['박준서','조혜원','김주이','윤지환'] },
+  { id:4, name:'4모둠', members:['최효민','정서윤','이세은','이강민'] },
+  { id:5, name:'5모둠', members:['김지원','임승언','이서준','김수현','이윤아'] },
+  { id:6, name:'6모둠', members:['이주호','민나진','최상윤','황세현','이수빈'] },
 ];
 const ALL_STUDENTS = GROUPS.flatMap(g => g.members.map(m => ({ name:m, group:g.id })));
 const TEACHER_ACCOUNT = { name:'김민재 선생님', group:0, password:'teacher2024' };
