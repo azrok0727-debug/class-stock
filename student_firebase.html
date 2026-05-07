@@ -1423,16 +1423,28 @@ function startPriceTick() {
 
       // ── 상한가/하한가 (1시간 기준 ±50%) ─────────────
       const hourBase = fbState.hourlyBase?.[key] ?? cur;
-      const upperLimit = Math.round(hourBase * 1.5 * 10) / 10;  // +50%
-      const lowerLimit = Math.max(1, Math.round(hourBase * 0.5 * 10) / 10); // -50%
+      const upperLimit = Math.round(hourBase * 1.5 * 10) / 10;
+      const lowerLimit = Math.max(1, Math.round(hourBase * 0.5 * 10) / 10);
 
-      // ── 수요/공급 압력 계산 ──────────────────────────
-      const pressure = fbState.tickPressure?.[key] ?? 0;
-      const pressureEffect = Math.max(-0.05, Math.min(0.05, pressure * 0.01));
+      // ── 거래량 기반 가격 결정 ──────────────────────────
+      // 직전 틱 동안의 모든 거래(시장가+지정가체결)를 추적해서 마지막 체결가로 설정
+      const lastTrades = fbState.lastTrades?.[key];
+      let newBase;
 
-      const noise = (Math.random() - 0.5) * 0.04; // 평균 0인 균등분포
-      const drift = (fundamental - cur) * 0.15;
-      let newBase = Math.round((cur + drift + cur * noise + cur * pressureEffect) * 10) / 10;
+      if (lastTrades && lastTrades.length > 0) {
+        // 거래가 있었음 → VWAP (거래량 가중 평균 체결가)으로 가격 결정
+        let totalQty = 0, totalAmount = 0;
+        lastTrades.forEach(t => {
+          totalQty += t.qty;
+          totalAmount += t.qty * t.price;
+        });
+        newBase = totalQty > 0 ? Math.round((totalAmount / totalQty) * 10) / 10 : cur;
+      } else {
+        // 거래량 없음 → 기존 펀더멘탈 + 노이즈 로직
+        const noise = (Math.random() - 0.5) * 0.04;
+        const drift = (fundamental - cur) * 0.15;
+        newBase = Math.round((cur + drift + cur * noise) * 10) / 10;
+      }
 
       // 상한가/하한가 적용
       newBase = Math.max(lowerLimit, Math.min(upperLimit, newBase));
@@ -1458,7 +1470,8 @@ function startPriceTick() {
       updates['state/prices/' + key + '_INV'] = newInv;
       updates['state/prices/' + key + '_LEV'] = newLev;
 
-      // 압력 소멸
+      // 거래 기록 초기화 (다음 틱을 위해)
+      updates['state/lastTrades/' + key] = null;
       updates['state/tickPressure/' + key] = 0;
     });
     // 이전 가격 저장
@@ -2417,9 +2430,10 @@ window.executeModalTrade = async function executeModalTrade(ticker) {
     // ── 수요/공급 압력 누적 ──────────────────────────
     if (!ticker.includes('_INV') && !ticker.includes('_LEV')) {
       const pressureDelta = isBuy ? qty : -qty;
-      const curPressure = fbState.tickPressure?.[ticker] ?? 0;
-      await update(ref(db, 'state/tickPressure'), {
-        [ticker]: curPressure + pressureDelta
+      const curTrades = fbState.lastTrades?.[ticker] ?? [];
+      const newTrades = [...curTrades, { qty, price, side: activeTradeType, ts: Date.now() }];
+      await update(ref(db, 'state/lastTrades'), {
+        [ticker]: newTrades
       });
     }
     showToast(`${isBuy?'구매':'판매'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
@@ -2666,7 +2680,7 @@ function renderPendingOrders(ticker) {
     html += '<div class="pending-order-item">';
     html += '<span style="color:' + color + ';font-weight:700;">' + side + '</span>';
     html += '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>';
-    html += '<button class="pending-order-cancel" onclick="cancelLimitOrder(' + JSON.stringify(o.id) + ')">취소</button>';
+    html += '<button class="pending-order-cancel" data-action="cancel-limit-pc" data-order-id="' + encodeURIComponent(o.id) + '">취소</button>';
     html += '</div>';
   });
   html += '</div>';
@@ -2674,8 +2688,22 @@ function renderPendingOrders(ticker) {
 }
 
 window.cancelLimitOrder = async function(orderId) {
-  await update(ref(db, 'state/limitOrders/' + currentUser), { [orderId]: null });
-  renderCurrentTab();
+  try {
+    await update(ref(db, 'state/limitOrders/' + currentUser), { [orderId]: null });
+    showToast('지정가 주문이 취소됐어요', 'info');
+    // 차트 모달이 열려있으면 모달도 갱신
+    if (chartModalTicker) {
+      const panel = document.getElementById('modal-chart-panel');
+      if (panel) {
+        panel.innerHTML = renderChartModalInner(chartModalTicker);
+        setTimeout(() => bindDiscussEvents(chartModalTicker), 30);
+      }
+    }
+    renderCurrentTab();
+  } catch (e) {
+    console.error('취소 오류:', e);
+    showToast('취소 실패: ' + e.message, 'error');
+  }
 };
 
 window.placeLimitOrder = async function placeLimitOrder() {
@@ -2707,24 +2735,33 @@ async function checkLimitOrders() {
         ? curPrice <= order.limitPrice   // 매수: 현재가가 지정가 이하로 내려오면
         : curPrice >= order.limitPrice;  // 매도: 현재가가 지정가 이상으로 오르면
       if (!triggered) continue;
-      // 체결 처리
+      // 체결 처리 (limitPrice로)
       const stu = fbState.students?.[userId];
       if (!stu) continue;
-      const total = order.qty * curPrice;
+      const totalAtLimit = order.qty * order.limitPrice;
       if (order.side === 'buy') {
-        if (stu.deposit < total) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
-        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit - total) * 100) / 100;
+        if (stu.deposit < totalAtLimit) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
         const newHeld = (stu.holdings?.[order.ticker] ?? 0) + order.qty;
         updates['state/students/' + userId + '/holdings/' + order.ticker] = newHeld;
       } else {
         const held = stu.holdings?.[order.ticker] ?? 0;
         if (held < order.qty) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
-        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit + total) * 100) / 100;
         updates['state/students/' + userId + '/holdings/' + order.ticker] = held - order.qty;
       }
       // 거래내역 추가
-      const hist = [...(stu.history ?? []), { type: order.side, ticker: order.ticker, qty: order.qty, price: curPrice, total, date: new Date().toLocaleString('ko-KR'), isLimit: true }];
+      const hist = [...(stu.history ?? []), { type: order.side, ticker: order.ticker, qty: order.qty, price: order.limitPrice, total: order.qty * order.limitPrice, date: new Date().toLocaleString('ko-KR'), isLimit: true }];
       updates['state/students/' + userId + '/history'] = hist;
+      // 학생 예금/보유 (지정가로 체결되었으므로 limitPrice 사용)
+      if (order.side === 'buy') {
+        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit - (order.qty * order.limitPrice)) * 100) / 100;
+      } else {
+        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit + (order.qty * order.limitPrice)) * 100) / 100;
+      }
+      // 거래 기록 (가격 결정용) - 지정가 체결도 거래량으로 반영
+      if (!order.ticker.includes('_INV') && !order.ticker.includes('_LEV')) {
+        const curT = fbState.lastTrades?.[order.ticker] ?? [];
+        updates['state/lastTrades/' + order.ticker] = [...curT, { qty: order.qty, price: order.limitPrice, side: order.side, ts: Date.now() }];
+      }
       updates['state/limitOrders/' + userId + '/' + orderId] = null;
     }
   }
@@ -2785,6 +2822,14 @@ function renderTradePanel() {
 }
 
 function attachTabListeners() {
+  // 지정가 취소 (PC 패널)
+  document.querySelectorAll('[data-action="cancel-limit-pc"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const orderId = decodeURIComponent(btn.dataset.orderId);
+      window.cancelLimitOrder(orderId);
+    });
+  });
+
   // stock row click
   document.querySelectorAll('.stock-row[data-ticker]').forEach(el => {
     el.addEventListener('click', () => {
@@ -2903,15 +2948,12 @@ async function executeTrade() {
       return current;
     });
 
-    // ── 수요/공급 압력 누적 ──────────────────────────
-    // 기본 주식(G1~G6)만 압력 반영 (인버스/레버리지는 파생상품이므로 제외)
-    const baseTicker = selectedStock.replace('_INV','').replace('_LEV','');
+    // ── 거래 기록 (가격 결정용) ──────────────────────
     if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV')) {
-      // 매수: 양수 압력, 매도: 음수 압력 (수량에 비례)
-      const pressureDelta = isBuy ? qty : -qty;
-      const curPressure = fbState.tickPressure?.[selectedStock] ?? 0;
-      await update(ref(db, 'state/tickPressure'), {
-        [selectedStock]: curPressure + pressureDelta
+      const curTrades = fbState.lastTrades?.[selectedStock] ?? [];
+      const newTrades = [...curTrades, { qty, price, side: activeTradeType, ts: Date.now() }];
+      await update(ref(db, 'state/lastTrades'), {
+        [selectedStock]: newTrades
       });
     }
     showToast(`${isBuy ? '구매' : '판매'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
