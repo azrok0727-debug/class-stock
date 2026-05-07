@@ -363,8 +363,36 @@ function renderDashboard() {
 
 // ── 학생 관리 ────────────────────────────────────────────
 function renderStudents() {
+  // 김민재 선생님 카드
+  const teacherStu = fbState.students?.['김민재 선생님'] ?? {};
+  const teacherSv  = calcStockVal('김민재 선생님');
+  const teacherTot = (teacherStu.deposit ?? 0) + teacherSv;
+  const teacherCard = `
+    <div class="card" style="border:2px solid var(--purple);background:rgba(167,139,250,0.06);">
+      <h2 style="color:var(--purple)">👨‍🏫 관리자 계정</h2>
+      <table class="data-table">
+        <thead><tr><th>이름</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th></tr></thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:600">김민재 선생님</td>
+            <td>${fmt(teacherStu.deposit ?? 0)}점</td>
+            <td>${fmt(teacherSv)}점</td>
+            <td style="font-weight:700">${fmt(teacherTot)}점</td>
+            <td>
+              <div class="inline-edit">
+                <input class="inline-input" type="number" data-dep-name="김민재 선생님" value="${Math.round(teacherStu.deposit ?? 0)}" />
+                <button class="btn-sm blue" data-save-dep="김민재 선생님">저장</button>
+                <button class="btn-sm green" data-add-dep="김민재 선생님">+추가</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
   return `
     <div class="info-box">💡 예금 수정 후 저장 버튼을 눌러주세요. 추가 버튼은 현재 예금에 입력한 금액을 더합니다.</div>
+    ${teacherCard}
     ${GROUPS.map((g,gi) => `
       <div class="card">
         <h2 style="color:${GROUP_COLORS[gi]}">${g.name}</h2>
@@ -534,31 +562,96 @@ function renderStocks() {
 }
 
 // ── 거래내역 ────────────────────────────────────────────
+let txSortOrder = 'newest'; // 'newest' | 'oldest'
+let txFilterType = 'all'; // 'all' | 'buy' | 'sell' | 'salary'
+let txFilterStudent = '';
+
 function renderTransactions() {
   const all = [];
-  ALL_STUDENTS.forEach(s => {
-    (fbState.students?.[s.name]?.history ?? []).forEach(h => all.push({...h, student:s.name, group:s.group}));
+  // 학생 + 선생님 거래내역 모두 포함
+  const studentNames = [...ALL_STUDENTS.map(s => s.name), '김민재 선생님'];
+  studentNames.forEach(name => {
+    const stu = fbState.students?.[name];
+    if (!stu) return;
+    const groupId = stu.group ?? 0;
+    (stu.history ?? []).forEach(h => all.push({...h, student:name, group:groupId}));
   });
-  all.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  if (!all.length) return `<div class="card"><div style="text-align:center;padding:40px;color:var(--text2);">거래 내역이 없습니다.</div></div>`;
+  // 필터 적용
+  let filtered = all;
+  if (txFilterType !== 'all') {
+    filtered = filtered.filter(h => h.type === txFilterType);
+  }
+  if (txFilterStudent) {
+    filtered = filtered.filter(h => h.student === txFilterStudent);
+  }
+
+  // 정렬
+  filtered.sort((a,b) => {
+    const da = new Date(a.date).getTime();
+    const db = new Date(b.date).getTime();
+    return txSortOrder === 'newest' ? db - da : da - db;
+  });
+
+  // 학생 옵션 목록
+  const studentOptions = ['<option value="">— 전체 학생 —</option>']
+    .concat(studentNames.map(n => '<option value="'+n+'"'+(txFilterStudent===n?' selected':'')+'>'+n+'</option>'))
+    .join('');
+
+  const filterBar = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:12px;background:var(--bg3);border-radius:10px;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--text2);font-weight:600;">정렬:</span>
+        <button data-tx-sort="newest" style="padding:6px 12px;background:${txSortOrder==='newest'?'var(--blue)':'var(--bg)'};color:${txSortOrder==='newest'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">↓ 최신순</button>
+        <button data-tx-sort="oldest" style="padding:6px 12px;background:${txSortOrder==='oldest'?'var(--blue)':'var(--bg)'};color:${txSortOrder==='oldest'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">↑ 오래된순</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--text2);font-weight:600;">유형:</span>
+        <button data-tx-type="all"    style="padding:6px 12px;background:${txFilterType==='all'?'var(--purple)':'var(--bg)'};color:${txFilterType==='all'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">전체</button>
+        <button data-tx-type="buy"    style="padding:6px 12px;background:${txFilterType==='buy'?'var(--red)':'var(--bg)'};color:${txFilterType==='buy'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">매수</button>
+        <button data-tx-type="sell"   style="padding:6px 12px;background:${txFilterType==='sell'?'var(--blue)':'var(--bg)'};color:${txFilterType==='sell'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">매도</button>
+        <button data-tx-type="salary" style="padding:6px 12px;background:${txFilterType==='salary'?'var(--green)':'var(--bg)'};color:${txFilterType==='salary'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">주급</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--text2);font-weight:600;">학생:</span>
+        <select id="tx-filter-student" style="padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:12px;">${studentOptions}</select>
+      </div>
+    </div>
+  `;
+
+  if (!filtered.length) return `<div class="card"><h2>📋 전체 거래내역</h2>${filterBar}<div style="text-align:center;padding:40px;color:var(--text2);">거래 내역이 없습니다.</div></div>`;
+
   return `
     <div class="card">
-      <h2>📋 전체 거래내역 <span class="section-tag">${all.length}건</span></h2>
+      <h2>📋 전체 거래내역 <span class="section-tag">${filtered.length}건 / 전체 ${all.length}건</span></h2>
+      ${filterBar}
       <table class="data-table">
         <thead><tr><th>일시</th><th>학생</th><th>구분</th><th>종목</th><th>수량</th><th>단가</th><th>총액</th></tr></thead>
         <tbody>
-          ${all.map(h => {
-            const isBuy = h.type === 'buy';
-            const g     = GROUPS.find(g=>g.id===h.group);
+          ${filtered.map(h => {
+            const isBuy    = h.type === 'buy';
+            const isSell   = h.type === 'sell';
+            const isSalary = h.type === 'salary';
+            const g        = GROUPS.find(g=>g.id===h.group);
+            const groupName = h.group === 0 ? '관리자' : (g?.name ?? '');
+            const groupColor = h.group === 0 ? 'var(--purple)' : GROUP_COLORS[h.group-1];
+            let typeLabel  = '매수';
+            let typeStyle  = 'background:var(--red-bg);color:var(--red)';
+            if (isSell)   { typeLabel = '매도'; typeStyle = 'background:var(--blue-bg);color:var(--blue)'; }
+            if (isSalary) { typeLabel = '주급'+(h.role?'('+h.role+')':''); typeStyle = 'background:var(--green-bg);color:var(--green)'; }
+            const totalColor = isBuy ? 'color:var(--red)' : 'color:var(--blue)';
+            const totalSign  = isBuy ? '-' : '+';
+            const tickerCell = isSalary ? '—' : h.ticker;
+            const qtyCell    = isSalary ? '—' : (h.qty + '주');
+            const priceCell  = isSalary ? '—' : fmtF(h.price);
             return `<tr>
               <td style="font-size:11px;color:var(--text3)">${h.date}</td>
-              <td style="font-weight:600">${h.student} <span style="font-size:11px;color:${GROUP_COLORS[h.group-1]}">${g?.name}</span></td>
-              <td><span style="font-size:11px;padding:2px 7px;border-radius:4px;font-weight:700;${isBuy?'background:var(--red-bg);color:var(--red)':'background:var(--blue-bg);color:var(--blue)'}">${isBuy?'매수':'매도'}</span></td>
-              <td style="font-family:'Space Grotesk',sans-serif;">${h.ticker}</td>
-              <td>${h.qty}주</td>
-              <td>${fmtF(h.price)}</td>
-              <td style="font-weight:700;${isBuy?'color:var(--red)':'color:var(--blue)'}">${isBuy?'-':'+'}${fmt(h.total)}</td>
+              <td style="font-weight:600">${h.student} <span style="font-size:11px;color:${groupColor}">${groupName}</span></td>
+              <td><span style="font-size:11px;padding:2px 7px;border-radius:4px;font-weight:700;${typeStyle}">${typeLabel}</span></td>
+              <td style="font-family:'Space Grotesk',sans-serif;">${tickerCell}</td>
+              <td>${qtyCell}</td>
+              <td>${priceCell}</td>
+              <td style="font-weight:700;${totalColor}">${totalSign}${fmt(h.total)}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -1361,7 +1454,24 @@ function attachTabListeners() {
   // 초기화 버튼
   document.querySelectorAll('[data-reset]').forEach(btn => {
     btn.addEventListener('click', () => doReset(btn.dataset.reset));
+  });  // 거래내역 정렬/필터 이벤트
+  document.querySelectorAll('[data-tx-sort]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      txSortOrder = btn.dataset.txSort;
+      renderTab();
+    });
   });
+  document.querySelectorAll('[data-tx-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      txFilterType = btn.dataset.txType;
+      renderTab();
+    });
+  });
+  document.getElementById('tx-filter-student')?.addEventListener('change', e => {
+    txFilterStudent = e.target.value;
+    renderTab();
+  });
+
 }
 
 async function doReset(type) {
