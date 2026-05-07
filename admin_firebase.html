@@ -199,10 +199,11 @@ function subscribeState() {
     updateMarketCtrl();
     autoUpdateGroupScores(); // 모둠 총점 자동 반영
     if (isAdmin) {
-      // 공지/뉴스 탭에서 입력 중이면 자동 재렌더 건너뜀
-      const skipRender = (activeTab === 'notice' || activeTab === 'news') &&
-        (document.activeElement?.tagName === 'INPUT' ||
-         document.activeElement?.tagName === 'TEXTAREA');
+      // 입력 중이면 자동 재렌더 건너뜀 (공지/뉴스/주급 탭)
+      const isInput = document.activeElement?.tagName === 'INPUT' ||
+                      document.activeElement?.tagName === 'TEXTAREA' ||
+                      document.activeElement?.tagName === 'SELECT';
+      const skipRender = (activeTab === 'notice' || activeTab === 'news' || activeTab === 'salary') && isInput;
       if (!skipRender) renderTab();
     }
   }, err => showToast('Firebase 연결 실패: ' + err.message, 'error'));
@@ -580,7 +581,7 @@ function renderSalary() {
       '<span style="flex:1;font-weight:700;font-size:13px;">' + roleName + '</span>' +
       '<input type="number" value="' + bonus + '" min="0" step="10" data-role="' + roleName + '" class="role-bonus-input" style="width:90px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;text-align:right;" />' +
       '<span style="font-size:12px;color:var(--text2);">점</span>' +
-      '<button onclick="deleteRole(' + JSON.stringify(roleName) + ')" style="padding:5px 10px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);cursor:pointer;font-size:11px;font-family:inherit;">삭제</button>' +
+      '<button data-action="delete-role" data-role-name="' + encodeURIComponent(roleName) + '" style="padding:5px 10px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);cursor:pointer;font-size:11px;font-family:inherit;">삭제</button>' +
     '</div>';
   });
   if (!rolesHtml) {
@@ -694,18 +695,23 @@ window.addRole = async function() {
 };
 
 window.deleteRole = async function(roleName) {
-  if (!confirm(roleName + ' 역할을 삭제할까요?')) return;
-  const updates = {};
-  updates['state/salaryConfig/roles/' + roleName] = null;
-  // 이 역할 배정된 학생들도 해제
-  const studentRoles = fbState.salaryConfig?.studentRoles ?? {};
-  Object.entries(studentRoles).forEach(([student, r]) => {
-    if (r === roleName) {
-      updates['state/salaryConfig/studentRoles/' + student] = null;
-    }
-  });
-  await update(ref(db), updates);
-  showToast(roleName + ' 역할 삭제됨', 'info');
+  try {
+    if (!window.confirm(roleName + ' 역할을 삭제할까요?')) return;
+    const updates = {};
+    updates['state/salaryConfig/roles/' + roleName] = null;
+    // 이 역할 배정된 학생들도 해제
+    const studentRoles = fbState.salaryConfig?.studentRoles ?? {};
+    Object.entries(studentRoles).forEach(([student, r]) => {
+      if (r === roleName) {
+        updates['state/salaryConfig/studentRoles/' + student] = null;
+      }
+    });
+    await update(ref(db), updates);
+    showToast(roleName + ' 역할 삭제됨', 'info');
+  } catch (e) {
+    console.error('deleteRole error:', e);
+    showToast('삭제 오류: ' + e.message, 'error');
+  }
 };
 
 window.saveRoleBonuses = async function() {
@@ -1115,6 +1121,14 @@ function switchAdminChart(ticker) {
 }
 
 function attachTabListeners() {
+  // 주급 탭 - 역할 삭제 이벤트 위임
+  document.querySelectorAll('[data-action="delete-role"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const roleName = decodeURIComponent(btn.dataset.roleName);
+      window.deleteRole(roleName);
+    });
+  });
+
   // 예금 저장
   document.querySelectorAll('[data-save-dep]').forEach(btn => {
     btn.addEventListener('click', async () => {
