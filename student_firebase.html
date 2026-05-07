@@ -1430,7 +1430,7 @@ function startPriceTick() {
       const pressure = fbState.tickPressure?.[key] ?? 0;
       const pressureEffect = Math.max(-0.05, Math.min(0.05, pressure * 0.01));
 
-      const noise = (Math.random() - 0.485) * 0.04;
+      const noise = (Math.random() - 0.5) * 0.04; // 평균 0인 균등분포
       const drift = (fundamental - cur) * 0.15;
       let newBase = Math.round((cur + drift + cur * noise + cur * pressureEffect) * 10) / 10;
 
