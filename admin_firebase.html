@@ -273,6 +273,7 @@ function renderAdminMain() {
       <button class="tab ${activeTab==='notice'?'active':''}"    data-tab="notice">📢 간단 공지</button>
       <button class="tab ${activeTab==='salary'?'active':''}"    data-tab="salary">💰 주급 관리</button>
       <button class="tab ${activeTab==='split'?'active':''}"     data-tab="split">✂️ 액면분할</button>
+      <button class="tab ${activeTab==='tax'?'active':''}"       data-tab="tax">💸 세금징수</button>
       <button class="tab" data-tab="reset" style="color:var(--red)">⚠️ 초기화</button>
     </div>
     <div id="tab-content"></div>`;
@@ -299,6 +300,7 @@ function renderTab() {
   if (activeTab === 'notice')       el.innerHTML = renderNoticeAdmin();
   if (activeTab === 'salary')       el.innerHTML = renderSalary();
   if (activeTab === 'split')        el.innerHTML = renderSplit();
+  if (activeTab === 'tax')          el.innerHTML = renderTax();
   if (activeTab === 'reset')        el.innerHTML = renderReset();
   attachTabListeners();
 }
@@ -639,11 +641,20 @@ function renderTransactions() {
             let typeStyle  = 'background:var(--red-bg);color:var(--red)';
             if (isSell)   { typeLabel = '매도'; typeStyle = 'background:var(--blue-bg);color:var(--blue)'; }
             if (isSalary) { typeLabel = '주급'+(h.role?'('+h.role+')':''); typeStyle = 'background:var(--green-bg);color:var(--green)'; }
-            const totalColor = isBuy ? 'color:var(--red)' : 'color:var(--blue)';
-            const totalSign  = isBuy ? '-' : '+';
-            const tickerCell = isSalary ? '—' : h.ticker;
-            const qtyCell    = isSalary ? '—' : (h.qty + '주');
-            const priceCell  = isSalary ? '—' : fmtF(h.price);
+            const isTax = h.type === 'tax';
+            if (isTax) { typeLabel = '세금'; typeStyle = 'background:var(--red-bg);color:var(--red)'; }
+            const isTaxIncome = h.type === 'tax-income';
+            if (isTaxIncome) { typeLabel = '세수입금'; typeStyle = 'background:var(--purple-bg);color:var(--purple)'; }
+            const isForcedSell = h.type === 'sell' && h.forcedByTax;
+            if (isForcedSell) { typeLabel = '강제매도'; typeStyle = 'background:rgba(255,165,0,0.15);color:#ffa500'; }
+            const isTaxRow = h.type === 'tax';
+            const isTaxIncomeRow = h.type === 'tax-income';
+            const isNonStock = isSalary || isTaxRow || isTaxIncomeRow;
+            const totalColor = (isBuy || isTaxRow) ? 'color:var(--red)' : (isTaxIncomeRow ? 'color:var(--purple)' : 'color:var(--blue)');
+            const totalSign  = (isBuy || isTaxRow) ? '-' : '+';
+            const tickerCell = isNonStock ? '—' : h.ticker;
+            const qtyCell    = isNonStock ? '—' : (h.qty + '주');
+            const priceCell  = isNonStock ? '—' : fmtF(h.price);
             return `<tr>
               <td style="font-size:11px;color:var(--text3)">${h.date}</td>
               <td style="font-weight:600">${h.student} <span style="font-size:11px;color:${groupColor}">${groupName}</span></td>
@@ -1017,6 +1028,242 @@ window.executeSplit = async function(ticker, ratio) {
 
   await update(ref(db), updates);
   showToast(ticker + ' ' + ratio + ':1 액면분할 완료! ✂️', 'success');
+};
+
+
+// ── 세금 징수 (총자산 기준 누진세) ─────────────────────
+function calcTaxBracket(totalAsset) {
+  if (totalAsset >= 10000000) return { rate: 0.30, label: '30%', bracket: '1천만점 이상' };
+  if (totalAsset >= 1000000)  return { rate: 0.14, label: '14%', bracket: '100만점 이상' };
+  if (totalAsset >= 100000)   return { rate: 0.07, label: '7%',  bracket: '10만점 이상' };
+  if (totalAsset >= 10000)    return { rate: 0.02, label: '2%',  bracket: '1만점 이상' };
+  return { rate: 0, label: '0%', bracket: '1만점 미만' };
+}
+
+function renderTax() {
+  // 모든 학생(선생님 제외) 세금 미리보기
+  const studentNames = ALL_STUDENTS.map(s => s.name);
+  const results = studentNames.map(name => {
+    const stu = fbState.students?.[name];
+    if (!stu) return null;
+    const deposit = stu.deposit ?? 0;
+    const stockVal = calcStockVal(name);
+    const total = deposit + stockVal;
+    const bracket = calcTaxBracket(total);
+    const tax = Math.round(total * bracket.rate);
+    return { name, deposit, stockVal, total, bracket, tax, group: stu.group };
+  }).filter(Boolean);
+
+  // 세금 많은 순 정렬
+  results.sort((a, b) => b.tax - a.tax);
+
+  const totalTax = results.reduce((s, r) => s + r.tax, 0);
+  const taxablePeople = results.filter(r => r.tax > 0).length;
+
+  let rowsHtml = '';
+  results.forEach(r => {
+    const g = GROUPS.find(g => g.id === r.group);
+    rowsHtml += '<tr>' +
+      '<td style="font-weight:600;">' + r.name + ' <span style="font-size:11px;color:var(--text3);">' + (g?.name ?? '') + '</span></td>' +
+      '<td>' + fmt(Math.round(r.deposit)) + '점</td>' +
+      '<td>' + fmt(Math.round(r.stockVal)) + '점</td>' +
+      '<td style="font-weight:700;">' + fmt(Math.round(r.total)) + '점</td>' +
+      '<td><span style="padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;background:' + (r.tax > 0 ? 'rgba(240,80,96,0.15)' : 'var(--bg3)') + ';color:' + (r.tax > 0 ? 'var(--red)' : 'var(--text3)') + ';">' + r.bracket.label + '</span></td>' +
+      '<td style="font-weight:700;color:' + (r.tax > 0 ? 'var(--red)' : 'var(--text3)') + ';">' + (r.tax > 0 ? '-' + fmt(r.tax) : '0') + '점</td>' +
+    '</tr>';
+  });
+
+  return `
+    <div class="info-box" style="background:rgba(240,80,96,0.1);border:1px solid var(--red);">
+      💸 <b>세금 정책</b> (총자산 기준 누진세)<br>
+      • <b>1천만점 이상</b>: 총자산의 <b>30%</b><br>
+      • <b>100만점 이상</b>: 총자산의 <b>14%</b><br>
+      • <b>10만점 이상</b>: 총자산의 <b>7%</b><br>
+      • <b>1만점 이상</b>: 총자산의 <b>2%</b><br>
+      • <b>1만점 미만</b>: 세금 없음<br>
+      📌 예금이 부족하면 보유 주식을 자동 매도하여 세금 납부 (현재가 기준)<br>
+      📌 징수된 세금은 모두 <b style="color:var(--purple);">김민재 선생님</b> 예금으로 이전됩니다
+    </div>
+
+    <div class="metrics" style="margin-bottom:14px;">
+      <div class="metric">
+        <div class="metric-label">납세 대상</div>
+        <div class="metric-value blue">${taxablePeople}명</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">예상 총 세수</div>
+        <div class="metric-value red">${fmt(totalTax)}점</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">평균 세금</div>
+        <div class="metric-value">${taxablePeople > 0 ? fmt(Math.round(totalTax / taxablePeople)) : 0}점</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">최고 세율 대상</div>
+        <div class="metric-value orange">${results.filter(r => r.bracket.rate === 0.30).length}명</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px;">📋 학생별 세금 미리보기</h3>
+      <table class="data-table">
+        <thead><tr>
+          <th>학생</th>
+          <th>예금</th>
+          <th>주식 평가액</th>
+          <th>총 자산</th>
+          <th>세율</th>
+          <th>세금</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+
+    <div class="card" style="background:linear-gradient(135deg,rgba(240,80,96,0.15),rgba(245,87,108,0.1));border:2px solid var(--red);margin-top:14px;">
+      <h3 style="margin-bottom:8px;">💸 세금 일괄 징수</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+        버튼 클릭 시 <b>${taxablePeople}명</b>에게서 총 <b style="color:var(--red);">${fmt(totalTax)}점</b>의 세금이 징수됩니다.<br>
+        <b>예금이 부족하면 보유 주식이 자동 매도</b>되어 세금을 충당합니다.<br>
+        징수된 모든 세금은 <b style="color:var(--purple);">김민재 선생님</b> 계정으로 이전됩니다.
+      </p>
+      <button onclick="collectTaxes()" ${totalTax === 0 ? 'disabled' : ''} style="width:100%;padding:14px;background:${totalTax === 0 ? 'var(--bg3)' : 'var(--red)'};color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:15px;font-weight:800;cursor:${totalTax === 0 ? 'not-allowed' : 'pointer'};box-shadow:0 6px 20px rgba(240,80,96,0.4);">
+        ${totalTax === 0 ? '징수할 세금이 없습니다' : '💸 세금 징수 (총 -' + fmt(totalTax) + '점 → 김민재 선생님)'}
+      </button>
+    </div>
+  `;
+}
+
+window.collectTaxes = async function() {
+  if (!confirm('정말로 세금을 일괄 징수하시겠습니까?\n예금이 부족한 학생은 보유 주식이 자동 매도됩니다.')) return;
+
+  const studentNames = ALL_STUDENTS.map(s => s.name);
+  const updates = {};
+  let totalCollected = 0;
+  let collectedFrom = 0;
+  let forcedSells = 0;
+  const collectionLog = []; // {name, tax, soldStocks: [{ticker, qty, value}]}
+
+  for (const name of studentNames) {
+    const stu = fbState.students?.[name];
+    if (!stu) continue;
+    const deposit = stu.deposit ?? 0;
+    const stockVal = calcStockVal(name);
+    const total = deposit + stockVal;
+    const bracket = calcTaxBracket(total);
+    const tax = Math.round(total * bracket.rate);
+
+    if (tax <= 0) continue;
+
+    let remainingTax = tax;
+    let newDeposit = deposit;
+    const newHoldings = { ...(stu.holdings ?? {}) };
+    const soldList = [];
+
+    // 1. 예금에서 먼저 차감
+    if (newDeposit >= remainingTax) {
+      newDeposit = Math.round((newDeposit - remainingTax) * 100) / 100;
+      remainingTax = 0;
+    } else {
+      remainingTax -= newDeposit;
+      newDeposit = 0;
+    }
+
+    // 2. 예금이 부족하면 주식 강제 매도
+    if (remainingTax > 0) {
+      // 평가액 높은 종목부터 매도
+      const sortedStocks = Object.entries(newHoldings)
+        .filter(([_, q]) => q > 0)
+        .map(([t, q]) => ({ ticker: t, qty: q, price: fbState.prices?.[t] ?? 0, value: q * (fbState.prices?.[t] ?? 0) }))
+        .sort((a, b) => b.value - a.value);
+
+      for (const stock of sortedStocks) {
+        if (remainingTax <= 0) break;
+        if (stock.price <= 0) continue;
+
+        // 이 종목으로 충당해야 하는 점수
+        const neededQty = Math.ceil(remainingTax / stock.price);
+        const sellQty = Math.min(neededQty, stock.qty);
+        const sellAmount = sellQty * stock.price;
+
+        newHoldings[stock.ticker] = stock.qty - sellQty;
+        soldList.push({ ticker: stock.ticker, qty: sellQty, price: stock.price, total: sellAmount });
+        forcedSells++;
+
+        if (sellAmount >= remainingTax) {
+          // 남은 금액은 예금으로 환급
+          newDeposit = Math.round((newDeposit + (sellAmount - remainingTax)) * 100) / 100;
+          remainingTax = 0;
+        } else {
+          remainingTax -= sellAmount;
+        }
+      }
+    }
+
+    // 실제 징수된 금액 (강제매도 후에도 부족할 수 있음)
+    const actuallyCollected = tax - Math.max(0, remainingTax);
+    if (actuallyCollected <= 0) continue;
+
+    updates['state/students/' + name + '/deposit'] = newDeposit;
+    updates['state/students/' + name + '/holdings'] = newHoldings;
+
+    // 거래내역에 강제매도 + 세금 기록
+    const newHist = [...(stu.history ?? [])];
+    soldList.forEach(s => {
+      newHist.push({
+        type: 'sell',
+        ticker: s.ticker,
+        qty: s.qty,
+        price: s.price,
+        total: s.total,
+        date: new Date().toLocaleString('ko-KR'),
+        forcedByTax: true,
+      });
+    });
+    newHist.push({
+      type: 'tax',
+      ticker: '',
+      qty: 0,
+      price: 0,
+      total: actuallyCollected,
+      date: new Date().toLocaleString('ko-KR'),
+      taxRate: bracket.label,
+      totalAsset: total,
+    });
+    updates['state/students/' + name + '/history'] = newHist;
+
+    totalCollected += actuallyCollected;
+    collectedFrom++;
+    collectionLog.push({ name, tax: actuallyCollected, soldStocks: soldList });
+  }
+
+  // 김민재 선생님 계정에 입금
+  if (totalCollected > 0) {
+    const teacher = fbState.students?.['김민재 선생님'] ?? {};
+    const teacherDep = teacher.deposit ?? 0;
+    updates['state/students/김민재 선생님/deposit'] = Math.round((teacherDep + totalCollected) * 100) / 100;
+
+    const teacherHist = [...(teacher.history ?? [])];
+    teacherHist.push({
+      type: 'tax-income',
+      ticker: '',
+      qty: 0,
+      price: 0,
+      total: totalCollected,
+      date: new Date().toLocaleString('ko-KR'),
+      collectedFrom,
+    });
+    updates['state/students/김민재 선생님/history'] = teacherHist;
+  }
+
+  if (totalCollected === 0) {
+    showToast('징수할 세금이 없어요', 'info');
+    return;
+  }
+
+  await update(ref(db), updates);
+  let msg = collectedFrom + '명에게서 총 ' + fmt(totalCollected) + '점 징수!';
+  if (forcedSells > 0) msg += ' (강제매도 ' + forcedSells + '건)';
+  showToast(msg + ' 💸', 'success');
 };
 
 function renderReset() {
