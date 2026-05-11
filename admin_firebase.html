@@ -892,9 +892,11 @@ window.payAllSalaries = async function() {
 function renderSplit() {
   const stocks = [];
   GROUPS.forEach(g => {
-    stocks.push({ ticker: 'G' + g.id,        name: g.id + '모둠 (기본)',     type: 'base' });
-    stocks.push({ ticker: 'G' + g.id + '_INV', name: g.id + '모둠 인버스',     type: 'inv' });
-    stocks.push({ ticker: 'G' + g.id + '_LEV', name: g.id + '모둠 레버리지',   type: 'lev' });
+    stocks.push({ ticker: 'G' + g.id,           name: g.id + '모둠 (기본)',         type: 'base' });
+    stocks.push({ ticker: 'G' + g.id + '_INV',    name: g.id + '모둠 인버스',         type: 'inv' });
+    stocks.push({ ticker: 'G' + g.id + '_LEV',    name: g.id + '모둠 레버리지',       type: 'lev' });
+    stocks.push({ ticker: 'G' + g.id + '_INV100', name: g.id + '모둠 100배 인버스',   type: 'inv100' });
+    stocks.push({ ticker: 'G' + g.id + '_LEV100', name: g.id + '모둠 100배 레버리지', type: 'lev100' });
   });
 
   let stockListHtml = '';
