@@ -2687,7 +2687,11 @@ function renderMarket() {
     <div class="section-title">📉 인버스 상품</div>
     <div class="stocks-2col">${stocks.filter(s=>s.type==='inv').map(row).join('')}</div>
     <div class="section-title">📈 레버리지 상품</div>
-    <div class="stocks-2col">${stocks.filter(s=>s.type==='lev').map(row).join('')}</div>`;
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='lev').map(row).join('')}</div>
+    <div class="section-title" style="color:var(--red);">⚠️ 100배 인버스 (초고위험)</div>
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='inv100').map(row).join('')}</div>
+    <div class="section-title" style="color:var(--red);">⚠️ 100배 레버리지 (초고위험)</div>
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='lev100').map(row).join('')}</div>`;
 
   return `<div class="market-grid"><div class="market-left">${stockList}</div>${rightPanel}</div>`;
 }
