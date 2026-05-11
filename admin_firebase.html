@@ -143,6 +143,7 @@ const GROUPS = [
   { id:6, name:'6모둠', members:['이주호','민나진','최상윤','황세현','이수빈'] },
 ];
 const ALL_STUDENTS = GROUPS.flatMap(g => g.members.map(m => ({ name:m, group:g.id })));
+const GN = Object.fromEntries(GROUPS.map(g => [g.id, g.name]));
 const GROUP_COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#ff7b72','#d2a679'];
 const ADMIN_PW = 'teacher2024';
 
