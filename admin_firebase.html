@@ -1306,9 +1306,10 @@ function renderCoupon() {
         오직 <b style="color:var(--green);">가나디쿠폰샵</b>에서 쿠폰 구매 시에만 사용할 수 있어요.<br>
         총 지원금 잔액: <b style="color:var(--green);">${fmt(totalCoupon)}점</b>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-        <button onclick="grantCouponAll()" style="padding:10px 18px;background:linear-gradient(135deg,#1a6644,#22d4a0);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);">🎟 전체 일괄 지급</button>
-        <input type="number" id="cp-all-amount" placeholder="일괄 지급액" min="0" class="inline-input" style="width:130px;" />
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+        <input type="number" id="cp-all-amount" placeholder="1인당 지급액" min="0" class="inline-input" style="width:140px;" />
+        <button onclick="grantCouponAll(false)" style="padding:10px 16px;background:linear-gradient(135deg,#1a4a8a,#4f80ff);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);">👥 전체 지급 (${ALL_STUDENTS.length}명)</button>
+        <button onclick="grantCouponAll(true)"  style="padding:10px 16px;background:linear-gradient(135deg,#1a6644,#22d4a0);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);">🎯 1만점 미만만 (${ALL_STUDENTS.filter(s=>calcTotal(s.name)<10000).length}명)</button>
       </div>
       <table class="data-table">
         <thead><tr><th>이름</th><th>모둠</th><th>현재 잔액</th><th>지급</th></tr></thead>
@@ -1332,21 +1333,25 @@ window.grantCoupon = async function(name) {
   if(inp) inp.value='';
 };
 
-window.grantCouponAll = async function() {
+window.grantCouponAll = async function(underOnly=false) {
   const amount = parseInt(document.getElementById('cp-all-amount')?.value);
   if(!amount||amount<=0) return showToast('일괄 지급액을 입력해주세요','error');
-  if(!confirm('모든 학생('+ALL_STUDENTS.length+'명)에게 '+fmt(amount)+'점씩 쿠폰 지원금을 지급하시겠습니까?')) return;
+  const targets = underOnly
+    ? ALL_STUDENTS.filter(s=>calcTotal(s.name)<10000)
+    : ALL_STUDENTS;
+  if(targets.length===0) return showToast('해당하는 학생이 없어요','info');
+  const label = underOnly ? '총 자산 1만점 미만 '+targets.length+'명' : '전체 '+targets.length+'명';
+  if(!confirm(label+'에게 '+fmt(amount)+'점씩 쿠폰 지원금을 지급하시겠습니까?')) return;
   const updates = {};
   const ts = Date.now();
-  ALL_STUDENTS.forEach(s => {
+  targets.forEach(s => {
     const cur = fbState.students?.[s.name]?.couponBalance??0;
     updates['state/students/'+s.name+'/couponBalance'] = Math.round((cur+amount)*100)/100;
-    const hist = [...(fbState.bankHistory?.[s.name]??[]),
-      {type:'coupon-grant', amount, ts}];
+    const hist = [...(fbState.bankHistory?.[s.name]??[]),{type:'coupon-grant', amount, ts}];
     updates['state/bankHistory/'+s.name] = hist;
   });
   await update(ref(db), updates);
-  showToast('전체 '+ALL_STUDENTS.length+'명에게 '+fmt(amount)+'점 지급 완료!','success');
+  showToast(label+'에게 '+fmt(amount)+'점 지급 완료!','success');
 };
 
 function renderReset() {
