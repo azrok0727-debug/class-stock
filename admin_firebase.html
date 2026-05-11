@@ -274,6 +274,7 @@ function renderAdminMain() {
       <button class="tab ${activeTab==='salary'?'active':''}"    data-tab="salary">💰 주급 관리</button>
       <button class="tab ${activeTab==='split'?'active':''}"     data-tab="split">✂️ 액면분할</button>
       <button class="tab ${activeTab==='tax'?'active':''}"       data-tab="tax">💸 세금징수</button>
+      <button class="tab ${activeTab==='coupon'?'active':''}" data-tab="coupon">🎟 쿠폰 지원금</button>
       <button class="tab" data-tab="reset" style="color:var(--red)">⚠️ 초기화</button>
     </div>
     <div id="tab-content"></div>`;
@@ -301,6 +302,7 @@ function renderTab() {
   if (activeTab === 'salary')       el.innerHTML = renderSalary();
   if (activeTab === 'split')        el.innerHTML = renderSplit();
   if (activeTab === 'tax')          el.innerHTML = renderTax();
+  if (activeTab === 'coupon')       el.innerHTML = renderCoupon();
   if (activeTab === 'reset')        el.innerHTML = renderReset();
   attachTabListeners();
 }
@@ -547,8 +549,6 @@ function renderStocks() {
             ['',`G${g.id}`,g.name,'기본주식'],
             ['_INV',`G${g.id}_INV`,`${g.name} 인버스`,'인버스'],
             ['_LEV',`G${g.id}_LEV`,`${g.name} 레버리지`,'레버리지'],
-            ['_INV100',`G${g.id}_INV100`,`${g.name} 100배 인버스`,'100x 인버스'],
-            ['_LEV100',`G${g.id}_LEV100`,`${g.name} 100배 레버리지`,'100x 레버리지'],
           ].map(([,key,label,type]) => `<tr>
             <td><span style="font-family:'Space Grotesk',sans-serif;color:${GROUP_COLORS[i]}">${key}</span></td>
             <td style="font-size:12px;color:var(--text2)">${label}</td>
@@ -894,11 +894,9 @@ window.payAllSalaries = async function() {
 function renderSplit() {
   const stocks = [];
   GROUPS.forEach(g => {
-    stocks.push({ ticker: 'G' + g.id,           name: g.id + '모둠 (기본)',         type: 'base' });
-    stocks.push({ ticker: 'G' + g.id + '_INV',    name: g.id + '모둠 인버스',         type: 'inv' });
-    stocks.push({ ticker: 'G' + g.id + '_LEV',    name: g.id + '모둠 레버리지',       type: 'lev' });
-    stocks.push({ ticker: 'G' + g.id + '_INV100', name: g.id + '모둠 100배 인버스',   type: 'inv100' });
-    stocks.push({ ticker: 'G' + g.id + '_LEV100', name: g.id + '모둠 100배 레버리지', type: 'lev100' });
+    stocks.push({ ticker: 'G' + g.id,        name: g.id + '모둠 (기본)',     type: 'base' });
+    stocks.push({ ticker: 'G' + g.id + '_INV', name: g.id + '모둠 인버스',     type: 'inv' });
+    stocks.push({ ticker: 'G' + g.id + '_LEV', name: g.id + '모둠 레버리지',   type: 'lev' });
   });
 
   let stockListHtml = '';
@@ -1235,6 +1233,11 @@ window.collectTaxes = async function() {
     });
     updates['state/students/' + name + '/history'] = newHist;
 
+    // ── 가나디뱅크 거래내역에 세금 납부 기록 ──
+    const bankHist = [...(fbState.bankHistory?.[name] ?? [])];
+    bankHist.push({ type:'tax', amount:actuallyCollected, ts:Date.now() });
+    updates['state/bankHistory/' + name] = bankHist;
+
     totalCollected += actuallyCollected;
     collectedFrom++;
     collectionLog.push({ name, tax: actuallyCollected, soldStocks: soldList });
@@ -1257,6 +1260,11 @@ window.collectTaxes = async function() {
       collectedFrom,
     });
     updates['state/students/김민재 선생님/history'] = teacherHist;
+
+    // ── 가나디뱅크 선생님 거래내역에 세금 수입 기록 ──
+    const teacherBankHist = [...(fbState.bankHistory?.['김민재 선생님'] ?? [])];
+    teacherBankHist.push({ type:'tax-income', amount:totalCollected, from:collectedFrom, ts:Date.now() });
+    updates['state/bankHistory/김민재 선생님'] = teacherBankHist;
   }
 
   if (totalCollected === 0) {
@@ -1268,6 +1276,76 @@ window.collectTaxes = async function() {
   let msg = collectedFrom + '명에게서 총 ' + fmt(totalCollected) + '점 징수!';
   if (forcedSells > 0) msg += ' (강제매도 ' + forcedSells + '건)';
   showToast(msg + ' 💸', 'success');
+};
+
+// ── 쿠폰 구매 지원금 관리 ───────────────────────────────
+function renderCoupon() {
+  const rows = ALL_STUDENTS.map(s => {
+    const bal = fbState.students?.[s.name]?.couponBalance ?? 0;
+    return `<tr>
+      <td style="font-weight:600;">${s.name}</td>
+      <td>${GN[s.group]||''}</td>
+      <td style="color:var(--green);font-weight:700;">${fmt(bal)}점</td>
+      <td>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" class="inline-input" id="cp-${s.name}" placeholder="지급액" min="0" style="width:90px;" />
+          <button onclick="grantCoupon('${s.name}')" style="padding:5px 12px;background:rgba(34,212,160,0.15);border:1px solid rgba(34,212,160,0.3);border-radius:8px;color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);">지급</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const totalCoupon = ALL_STUDENTS.reduce((s,st)=>s+(fbState.students?.[st.name]?.couponBalance??0),0);
+
+  return `
+    <div class="card">
+      <h2>🎟 쿠폰 구매 지원금 관리</h2>
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.7;">
+        💡 쿠폰 구매 지원금은 <b style="color:var(--text);">송금 불가</b> · <b style="color:var(--text);">주식 구매 불가</b><br>
+        오직 <b style="color:var(--green);">가나디쿠폰샵</b>에서 쿠폰 구매 시에만 사용할 수 있어요.<br>
+        총 지원금 잔액: <b style="color:var(--green);">${fmt(totalCoupon)}점</b>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <button onclick="grantCouponAll()" style="padding:10px 18px;background:linear-gradient(135deg,#1a6644,#22d4a0);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);">🎟 전체 일괄 지급</button>
+        <input type="number" id="cp-all-amount" placeholder="일괄 지급액" min="0" class="inline-input" style="width:130px;" />
+      </div>
+      <table class="data-table">
+        <thead><tr><th>이름</th><th>모둠</th><th>현재 잔액</th><th>지급</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+window.grantCoupon = async function(name) {
+  const inp = document.getElementById('cp-'+name);
+  const amount = parseInt(inp?.value);
+  if(!amount||amount<=0) return showToast('지급액을 입력해주세요','error');
+  const cur = fbState.students?.[name]?.couponBalance??0;
+  const bankHist = [...(fbState.bankHistory?.[name]??[]),
+    {type:'coupon-grant', amount, ts:Date.now()}];
+  await update(ref(db), {
+    ['state/students/'+name+'/couponBalance']: Math.round((cur+amount)*100)/100,
+    ['state/bankHistory/'+name]: bankHist,
+  });
+  showToast(name+'에게 쿠폰 지원금 '+fmt(amount)+'점 지급!','success');
+  if(inp) inp.value='';
+};
+
+window.grantCouponAll = async function() {
+  const amount = parseInt(document.getElementById('cp-all-amount')?.value);
+  if(!amount||amount<=0) return showToast('일괄 지급액을 입력해주세요','error');
+  if(!confirm('모든 학생('+ALL_STUDENTS.length+'명)에게 '+fmt(amount)+'점씩 쿠폰 지원금을 지급하시겠습니까?')) return;
+  const updates = {};
+  const ts = Date.now();
+  ALL_STUDENTS.forEach(s => {
+    const cur = fbState.students?.[s.name]?.couponBalance??0;
+    updates['state/students/'+s.name+'/couponBalance'] = Math.round((cur+amount)*100)/100;
+    const hist = [...(fbState.bankHistory?.[s.name]??[]),
+      {type:'coupon-grant', amount, ts}];
+    updates['state/bankHistory/'+s.name] = hist;
+  });
+  await update(ref(db), updates);
+  showToast('전체 '+ALL_STUDENTS.length+'명에게 '+fmt(amount)+'점 지급 완료!','success');
 };
 
 function renderReset() {
@@ -1469,12 +1547,12 @@ async function deleteNotice(id) {
 // ── 관리자 차트 ────────────────────────────────────────
 let adminChartPeriod = '10m';
 const GROUP_NAMES_ADMIN = {
-  'G1':'1모둠','G1_INV':'1모둠 인버스','G1_LEV':'1모둠 레버리지','G1_INV100':'1모둠 100x인버스','G1_LEV100':'1모둠 100x레버리지',
-  'G2':'2모둠','G2_INV':'2모둠 인버스','G2_LEV':'2모둠 레버리지','G2_INV100':'2모둠 100x인버스','G2_LEV100':'2모둠 100x레버리지',
-  'G3':'3모둠','G3_INV':'3모둠 인버스','G3_LEV':'3모둠 레버리지','G3_INV100':'3모둠 100x인버스','G3_LEV100':'3모둠 100x레버리지',
-  'G4':'4모둠','G4_INV':'4모둠 인버스','G4_LEV':'4모둠 레버리지','G4_INV100':'4모둠 100x인버스','G4_LEV100':'4모둠 100x레버리지',
-  'G5':'5모둠','G5_INV':'5모둠 인버스','G5_LEV':'5모둠 레버리지','G5_INV100':'5모둠 100x인버스','G5_LEV100':'5모둠 100x레버리지',
-  'G6':'6모둠','G6_INV':'6모둠 인버스','G6_LEV':'6모둠 레버리지','G6_INV100':'6모둠 100x인버스','G6_LEV100':'6모둠 100x레버리지',
+  'G1':'1모둠','G1_INV':'1모둠 인버스','G1_LEV':'1모둠 레버리지',
+  'G2':'2모둠','G2_INV':'2모둠 인버스','G2_LEV':'2모둠 레버리지',
+  'G3':'3모둠','G3_INV':'3모둠 인버스','G3_LEV':'3모둠 레버리지',
+  'G4':'4모둠','G4_INV':'4모둠 인버스','G4_LEV':'4모둠 레버리지',
+  'G5':'5모둠','G5_INV':'5모둠 인버스','G5_LEV':'5모둠 레버리지',
+  'G6':'6모둠','G6_INV':'6모둠 인버스','G6_LEV':'6모둠 레버리지',
 };
 
 function getAdminCandles(ticker, period) {
@@ -1557,7 +1635,7 @@ function openAdminChart(ticker) {
   const price = fbState.prices?.[ticker]??0;
   const p = pct(ticker); const up=p>0,dn=p<0;
   const name = GROUP_NAMES_ADMIN[ticker] || ticker;
-  const color = GROUP_COLORS[parseInt(ticker.replace('G','').replace('_INV100','').replace('_LEV100','').replace('_INV','').replace('_LEV',''))-1] || '#58a6ff';
+  const color = GROUP_COLORS[parseInt(ticker.replace('G','').replace('_INV','').replace('_LEV',''))-1] || '#58a6ff';
   const modal = document.createElement('div');
   modal.id='admin-chart-modal'; modal.className='admin-chart-modal';
   modal.innerHTML=`
@@ -1743,16 +1821,12 @@ async function doReset(type) {
   }
   if (type === 'prices' || type === 'all') {
     GROUPS.forEach(g => {
-      updates[`state/prices/G${g.id}`]          = 100;
-      updates[`state/prices/G${g.id}_INV`]      = 20;
-      updates[`state/prices/G${g.id}_LEV`]      = 20;
-      updates[`state/prices/G${g.id}_INV100`]   = 20;
-      updates[`state/prices/G${g.id}_LEV100`]   = 20;
-      updates[`state/prevPrices/G${g.id}`]      = 100;
-      updates[`state/prevPrices/G${g.id}_INV`]  = 20;
-      updates[`state/prevPrices/G${g.id}_LEV`]  = 20;
-      updates[`state/prevPrices/G${g.id}_INV100`] = 20;
-      updates[`state/prevPrices/G${g.id}_LEV100`] = 20;
+      updates[`state/prices/G${g.id}`]       = 100;
+      updates[`state/prices/G${g.id}_INV`]   = 20;
+      updates[`state/prices/G${g.id}_LEV`]   = 20;
+      updates[`state/prevPrices/G${g.id}`]   = 100;
+      updates[`state/prevPrices/G${g.id}_INV`] = 20;
+      updates[`state/prevPrices/G${g.id}_LEV`] = 20;
     });
   }
   if (type === 'history' || type === 'all') {
@@ -1765,7 +1839,7 @@ async function doReset(type) {
   // ── 전일 대비 초기화: 현재가를 기준가로 재설정 ────────
   if (type === 'dailyclose' || type === 'chartall' || type === 'all') {
     GROUPS.forEach(g => {
-      ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+      ['', '_INV', '_LEV'].forEach(suf => {
         const k = `G${g.id}${suf}`;
         const curP = fbState.prices?.[k] ?? (suf ? 20 : 100);
         updates[`state/dailyClose/${k}`]  = curP;
