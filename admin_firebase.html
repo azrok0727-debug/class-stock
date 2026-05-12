@@ -365,21 +365,44 @@ function renderDashboard() {
 
 // ── 학생 관리 ────────────────────────────────────────────
 function renderStudents() {
-  // 김민재 선생님 카드
+  // 정렬된 학생 목록 생성
+  const allStudents = ALL_STUDENTS.map(s => {
+    const stu = fbState.students?.[s.name] ?? {};
+    const sv  = calcStockVal(s.name);
+    const tot = (stu.deposit ?? 0) + sv;
+    return { name: s.name, group: s.group, deposit: stu.deposit ?? 0, sv, tot };
+  });
+
+  const sortedStudents = [...allStudents].sort((a, b) => {
+    if (studentSortOrder === 'high') return b.tot - a.tot;
+    if (studentSortOrder === 'low')  return a.tot - b.tot;
+    return 0; // group: 모둠 순서 유지
+  });
+
+  // 정렬 버튼
+  const sortBar = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;padding:12px;background:var(--bg3);border-radius:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;font-weight:700;color:var(--text2);">정렬:</span>
+      <button data-stu-sort="group" style="padding:7px 14px;background:${studentSortOrder==='group'?'var(--blue)':'var(--bg)'};color:${studentSortOrder==='group'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">📋 모둠순</button>
+      <button data-stu-sort="high"  style="padding:7px 14px;background:${studentSortOrder==='high'?'var(--red)':'var(--bg)'};color:${studentSortOrder==='high'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">🔺 점수 높은순</button>
+      <button data-stu-sort="low"   style="padding:7px 14px;background:${studentSortOrder==='low'?'var(--blue)':'var(--bg)'};color:${studentSortOrder==='low'?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">🔻 점수 낮은순</button>
+    </div>`;
+
+  // 선생님 카드
   const teacherStu = fbState.students?.['김민재 선생님'] ?? {};
   const teacherSv  = calcStockVal('김민재 선생님');
   const teacherTot = (teacherStu.deposit ?? 0) + teacherSv;
   const teacherCard = `
-    <div class="card" style="border:2px solid var(--purple);background:rgba(167,139,250,0.06);">
+    <div class="card" style="border:2px solid var(--purple);background:rgba(167,139,250,0.06);margin-bottom:14px;">
       <h2 style="color:var(--purple)">👨‍🏫 관리자 계정</h2>
       <table class="data-table">
-        <thead><tr><th>이름</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th></tr></thead>
+        <thead><tr><th>이름</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th><th>개별 세금</th></tr></thead>
         <tbody>
           <tr>
             <td style="font-weight:600">김민재 선생님</td>
-            <td>${fmt(teacherStu.deposit ?? 0)}점</td>
-            <td>${fmt(teacherSv)}점</td>
-            <td style="font-weight:700">${fmt(teacherTot)}점</td>
+            <td>${fmt(Math.round(teacherStu.deposit ?? 0))}점</td>
+            <td>${fmt(Math.round(teacherSv))}점</td>
+            <td style="font-weight:700">${fmt(Math.round(teacherTot))}점</td>
             <td>
               <div class="inline-edit">
                 <input class="inline-input" type="number" data-dep-name="김민재 선생님" value="${Math.round(teacherStu.deposit ?? 0)}" />
@@ -387,41 +410,73 @@ function renderStudents() {
                 <button class="btn-sm green" data-add-dep="김민재 선생님">+추가</button>
               </div>
             </td>
+            <td>
+              <div class="inline-edit">
+                <input class="inline-input" type="number" placeholder="세금액" data-tax-name="김민재 선생님" style="width:90px;" />
+                <button class="btn-sm" style="background:var(--red);color:#fff;" data-collect-tax="김민재 선생님">징수</button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
-    </div>
-  `;
-  return `
-    <div class="info-box">💡 예금 수정 후 저장 버튼을 눌러주세요. 추가 버튼은 현재 예금에 입력한 금액을 더합니다.</div>
-    ${teacherCard}
-    ${GROUPS.map((g,gi) => `
-      <div class="card">
+    </div>`;
+
+  // 학생 행 렌더링 함수
+  function studentRow(s) {
+    const g = GROUPS.find(g => g.id === s.group);
+    const gColor = GROUP_COLORS[s.group - 1] ?? '#888';
+    return `<tr>
+      <td style="font-weight:600;">${s.name} <span style="font-size:11px;color:${gColor};">${g?.name ?? ''}</span></td>
+      <td>${fmt(Math.round(s.deposit))}점</td>
+      <td>${fmt(Math.round(s.sv))}점</td>
+      <td style="font-weight:700;">${fmt(Math.round(s.tot))}점</td>
+      <td>
+        <div class="inline-edit">
+          <input class="inline-input" type="number" data-dep-name="${s.name}" value="${Math.round(s.deposit)}" />
+          <button class="btn-sm blue" data-save-dep="${s.name}">저장</button>
+          <button class="btn-sm green" data-add-dep="${s.name}">+추가</button>
+        </div>
+      </td>
+      <td>
+        <div class="inline-edit">
+          <input class="inline-input" type="number" placeholder="세금액" data-tax-name="${s.name}" style="width:90px;" />
+          <button class="btn-sm" style="background:var(--red);color:#fff;" data-collect-tax="${s.name}">징수</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  // 정렬된 전체 테이블 (정렬 시) or 모둠별 테이블 (모둠순 시)
+  let studentsSection = '';
+  if (studentSortOrder === 'group') {
+    studentsSection = GROUPS.map((g, gi) => {
+      const members = allStudents.filter(s => s.group === g.id);
+      return `<div class="card" style="margin-bottom:14px;">
         <h2 style="color:${GROUP_COLORS[gi]}">${g.name}</h2>
         <table class="data-table">
-          <thead><tr><th>학생</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th></tr></thead>
-          <tbody>
-            ${g.members.map(m => {
-              const stu = fbState.students?.[m] ?? {};
-              const sv  = calcStockVal(m);
-              const tot = (stu.deposit ?? 0) + sv;
-              return `<tr>
-                <td style="font-weight:600">${m}</td>
-                <td>${fmt(stu.deposit ?? 0)}점</td>
-                <td>${fmt(sv)}점</td>
-                <td style="font-weight:700">${fmt(tot)}점</td>
-                <td>
-                  <div class="inline-edit">
-                    <input class="inline-input" type="number" data-dep-name="${m}" value="${Math.round(stu.deposit ?? 0)}" />
-                    <button class="btn-sm blue" data-save-dep="${m}">저장</button>
-                    <button class="btn-sm green" data-add-dep="${m}">+추가</button>
-                  </div>
-                </td>
-              </tr>`;
-            }).join('')}
-          </tbody>
+          <thead><tr><th>학생</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th><th>개별 세금</th></tr></thead>
+          <tbody>${members.map(studentRow).join('')}</tbody>
         </table>
-      </div>`).join('')}`;
+      </div>`;
+    }).join('');
+  } else {
+    studentsSection = `<div class="card">
+      <h2>${studentSortOrder === 'high' ? '🔺 점수 높은순' : '🔻 점수 낮은순'}</h2>
+      <table class="data-table">
+        <thead><tr><th>순위</th><th>학생</th><th>예금</th><th>주식 평가액</th><th>총 자산</th><th>예금 수정</th><th>개별 세금</th></tr></thead>
+        <tbody>${sortedStudents.map((s, i) => `<tr>
+          <td style="font-weight:700;color:${i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'var(--text2)'};">${i+1}위</td>
+          ${studentRow(s).replace('<tr>', '').replace('</tr>', '')}</tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  return `
+    <div class="info-box">💡 예금 수정 후 저장 버튼 클릭. 개별 세금은 금액 입력 후 징수 버튼 클릭 (징수액은 김민재 선생님 예금으로 이전)</div>
+    ${sortBar}
+    ${teacherCard}
+    ${studentsSection}`;
 }
 
 // ── 모둠 점수 ────────────────────────────────────────────
@@ -566,7 +621,8 @@ function renderStocks() {
 }
 
 // ── 거래내역 ────────────────────────────────────────────
-let txSortOrder = 'newest'; // 'newest' | 'oldest'
+let txSortOrder = 'newest';
+let studentSortOrder = 'group'; // 'group' | 'high' | 'low' // 'newest' | 'oldest'
 let txFilterType = 'all'; // 'all' | 'buy' | 'sell' | 'salary'
 let txFilterStudent = '';
 
@@ -1043,6 +1099,40 @@ function calcTaxBracket(totalAsset) {
   if (totalAsset >= 10000)    return { rate: 0.02, label: '2%',  bracket: '1만점 이상' };
   return { rate: 0, label: '0%', bracket: '1만점 미만' };
 }
+
+
+// ── 개별 세금 징수 ────────────────────────────────────────
+window.collectCustomTax = async function(name) {
+  const input = document.querySelector('[data-tax-name="' + name + '"]');
+  const amount = parseInt(input?.value) || 0;
+  if (amount <= 0) return showToast('세금 금액을 입력해주세요', 'error');
+  const stu = fbState.students?.[name];
+  if (!stu) return showToast('학생 데이터가 없습니다', 'error');
+  const dep = stu.deposit ?? 0;
+  if (amount > dep) return showToast('예금(' + fmt(Math.round(dep)) + '점)보다 많습니다', 'error');
+  if (!confirm(name + '에게 ' + fmt(amount) + '점 세금을 징수하시겠습니까?')) return;
+
+  const updates = {};
+  updates['state/students/' + name + '/deposit'] = Math.round((dep - amount) * 100) / 100;
+  const hist = [...(stu.history ?? []), {
+    type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), custom: true,
+  }];
+  updates['state/students/' + name + '/history'] = hist;
+
+  // 선생님 예금으로 이전
+  const teacher = fbState.students?.['김민재 선생님'] ?? {};
+  updates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + amount) * 100) / 100;
+  const tHist = [...(teacher.history ?? []), {
+    type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), from: name,
+  }];
+  updates['state/students/김민재 선생님/history'] = tHist;
+
+  await update(ref(db), updates);
+  showToast(name + '에게서 ' + fmt(amount) + '점 세금 징수! → 김민재 선생님 예금으로 이전', 'success');
+  if (input) input.value = '';
+};
 
 function renderTax() {
   // 모든 학생(선생님 제외) 세금 미리보기
@@ -1705,7 +1795,20 @@ function attachTabListeners() {
   // 초기화 버튼
   document.querySelectorAll('[data-reset]').forEach(btn => {
     btn.addEventListener('click', () => doReset(btn.dataset.reset));
-  });  // 거래내역 정렬/필터 이벤트
+  });  // 학생 정렬 이벤트
+  document.querySelectorAll('[data-stu-sort]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      studentSortOrder = btn.dataset.stuSort;
+      renderTab();
+    });
+  });
+  // 개별 세금 징수 이벤트
+  document.querySelectorAll('[data-collect-tax]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      window.collectCustomTax(btn.dataset.collectTax);
+    });
+  });
+  // 거래내역 정렬/필터 이벤트
   document.querySelectorAll('[data-tx-sort]').forEach(btn => {
     btn.addEventListener('click', () => {
       txSortOrder = btn.dataset.txSort;
