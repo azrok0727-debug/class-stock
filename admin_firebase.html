@@ -411,9 +411,11 @@ function renderStudents() {
               </div>
             </td>
             <td>
-              <div class="inline-edit">
-                <input class="inline-input" type="number" placeholder="세금액" data-tax-name="김민재 선생님" style="width:90px;" />
+              <div class="inline-edit" style="flex-wrap:wrap;gap:4px;">
+                <input class="inline-input" type="number" placeholder="금액" data-tax-name="김민재 선생님" style="width:70px;" />
                 <button class="btn-sm" style="background:var(--red);color:#fff;" data-collect-tax="김민재 선생님">징수</button>
+                <input class="inline-input" type="number" placeholder="%" data-tax-pct-name="김민재 선생님" style="width:50px;" min="0" max="100" step="0.1" />
+                <button class="btn-sm" style="background:#c0392b;color:#fff;" data-collect-tax-pct="김민재 선생님" data-tot="${Math.round(teacherTot)}">%징수</button>
               </div>
             </td>
           </tr>
@@ -439,8 +441,10 @@ function renderStudents() {
       </td>
       <td>
         <div class="inline-edit">
-          <input class="inline-input" type="number" placeholder="세금액" data-tax-name="${s.name}" style="width:90px;" />
+          <input class="inline-input" type="number" placeholder="금액" data-tax-name="${s.name}" style="width:65px;" />
           <button class="btn-sm" style="background:var(--red);color:#fff;" data-collect-tax="${s.name}">징수</button>
+          <input class="inline-input" type="number" placeholder="%" data-tax-pct-name="${s.name}" style="width:45px;" min="0" max="100" step="0.1" />
+          <button class="btn-sm" style="background:#c0392b;color:#fff;" data-collect-tax-pct="${s.name}">%징수</button>
         </div>
       </td>
     </tr>`;
@@ -1102,6 +1106,41 @@ function calcTaxBracket(totalAsset) {
 
 
 // ── 개별 세금 징수 ────────────────────────────────────────
+window.collectCustomTaxPct = async function(name) {
+  const pctInput = document.querySelector('[data-tax-pct-name="' + name + '"]');
+  const pct = parseFloat(pctInput?.value) || 0;
+  if (pct <= 0 || pct > 100) return showToast('0~100 사이의 % 값을 입력해주세요', 'error');
+  const stu = fbState.students?.[name];
+  if (!stu) return showToast('학생 데이터가 없습니다', 'error');
+  const dep = stu.deposit ?? 0;
+  const sv  = calcStockVal(name);
+  const tot = dep + sv;
+  const amount = Math.round(tot * (pct / 100));
+  if (amount <= 0) return showToast('계산된 세금이 0점입니다', 'error');
+  if (amount > dep) return showToast('예금(' + fmt(Math.round(dep)) + '점)이 부족합니다\n(총자산의 ' + pct + '% = ' + fmt(amount) + '점)', 'error');
+  if (!confirm(name + '의 총자산 ' + fmt(Math.round(tot)) + '점의 ' + pct + '% = ' + fmt(amount) + '점을 징수하시겠습니까?')) return;
+
+  const updates = {};
+  updates['state/students/' + name + '/deposit'] = Math.round((dep - amount) * 100) / 100;
+  const hist = [...(stu.history ?? []), {
+    type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), custom: true, taxPct: pct,
+  }];
+  updates['state/students/' + name + '/history'] = hist;
+  // 선생님 예금으로 이전
+  const teacher = fbState.students?.['김민재 선생님'] ?? {};
+  updates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + amount) * 100) / 100;
+  const tHist = [...(teacher.history ?? []), {
+    type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), from: name, taxPct: pct,
+  }];
+  updates['state/students/김민재 선생님/history'] = tHist;
+
+  await update(ref(db), updates);
+  showToast(name + ' 총자산의 ' + pct + '% → ' + fmt(amount) + '점 징수 완료! 💸', 'success');
+  if (pctInput) pctInput.value = '';
+};
+
 window.collectCustomTax = async function(name) {
   const input = document.querySelector('[data-tax-name="' + name + '"]');
   const amount = parseInt(input?.value) || 0;
@@ -1802,10 +1841,16 @@ function attachTabListeners() {
       renderTab();
     });
   });
-  // 개별 세금 징수 이벤트
+  // 개별 세금 징수 이벤트 (금액)
   document.querySelectorAll('[data-collect-tax]').forEach(btn => {
     btn.addEventListener('click', () => {
       window.collectCustomTax(btn.dataset.collectTax);
+    });
+  });
+  // 개별 세금 징수 이벤트 (%)
+  document.querySelectorAll('[data-collect-tax-pct]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      window.collectCustomTaxPct(btn.dataset.collectTaxPct);
     });
   });
   // 거래내역 정렬/필터 이벤트
