@@ -1299,17 +1299,14 @@ function buildDefaultState() {
     prices[`G${g.id}_INV`]    = 20;
     prices[`G${g.id}_LEV`]    = 20;
     prices[`G${g.id}_INV100`] = 20;
-    prices[`G${g.id}_LEV100`] = 20;
     prevPrices[`G${g.id}`]   = 100;
     prevPrices[`G${g.id}_INV`]    = 20;
     prevPrices[`G${g.id}_LEV`]    = 20;
     prevPrices[`G${g.id}_INV100`] = 20;
-    prevPrices[`G${g.id}_LEV100`] = 20;
     dailyClose[`G${g.id}`]   = 100;
     dailyClose[`G${g.id}_INV`]    = 20;
     dailyClose[`G${g.id}_LEV`]    = 20;
     dailyClose[`G${g.id}_INV100`] = 20;
-    dailyClose[`G${g.id}_LEV100`] = 20;
     shareSupply[`G${g.id}`]  = 60;
   });
   return { students, groups, prices, prevPrices, dailyClose, shareSupply, marketOpen:false };
@@ -1413,7 +1410,7 @@ function startPriceTick() {
     if (savedHourKey !== hourKey) {
       // 1시간마다 현재가를 hourlyBase로 저장
       GROUPS.forEach(g => {
-        ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+        ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
           const k = 'G' + g.id + suf;
           updates['state/hourlyBase/' + k] = fbState.prices?.[k] ?? (suf ? 20 : 100);
         });
@@ -1504,7 +1501,7 @@ function startPriceTick() {
       let newInv    = Math.round(curInv    * (1 - basePct)         * 10) / 10;
       let newLev    = Math.round(curLev    * (1 + basePct * 2)     * 10) / 10;
       let newInv100 = Math.round(curInv100 * (1 - basePct * 100)   * 10) / 10;
-      let newLev100 = Math.round(curLev100 * (1 + basePct * 100)   * 10) / 10;
+
 
       newInv = Math.max(Math.max(1, Math.round(hourBaseInv * 0.5 * 10) / 10),
                 Math.min(Math.round(hourBaseInv * 1.5 * 10) / 10, newInv));
@@ -1513,14 +1510,12 @@ function startPriceTick() {
       // 100배 상품은 ±50%(시간) 상하한이 너무 빡빡하니 ±90%로 완화
       newInv100 = Math.max(Math.max(1, Math.round(hourBaseInv100 * 0.1 * 10) / 10),
                 Math.min(Math.round(hourBaseInv100 * 1.9 * 10) / 10, newInv100));
-      newLev100 = Math.max(Math.max(1, Math.round(hourBaseLev100 * 0.1 * 10) / 10),
-                Math.min(Math.round(hourBaseLev100 * 1.9 * 10) / 10, newLev100));
+
 
       updates['state/prices/' + key]             = newBase;
       updates['state/prices/' + key + '_INV']    = newInv;
       updates['state/prices/' + key + '_LEV']    = newLev;
       updates['state/prices/' + key + '_INV100'] = newInv100;
-      updates['state/prices/' + key + '_LEV100'] = newLev100;
 
       // 거래 기록 초기화 (다음 틱을 위해)
       updates['state/lastTrades/' + key] = null;
@@ -1528,7 +1523,7 @@ function startPriceTick() {
     });
     // 이전 가격 저장
     GROUPS.forEach(g => {
-      ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+      ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
         const k = `G${g.id}${suf}`;
         updates[`state/prevPrices/${k}`] = fbState.prices?.[k] ?? (suf ? 20 : 100);
       });
@@ -1540,7 +1535,7 @@ function startPriceTick() {
     if (savedDate !== todayStr) {
       // 날짜가 바뀌었으면: 어제 종가 = 현재가 저장, 오늘 시초가도 저장
       GROUPS.forEach(g => {
-        ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+        ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
           const k = `G${g.id}${suf}`;
           const curP = fbState.prices?.[k] ?? (suf ? 20 : 100);
           updates[`state/dailyClose/${k}`]  = curP; // 전날 종가
@@ -1551,7 +1546,7 @@ function startPriceTick() {
     } else if (!fbState.openPrice) {
       // openPrice가 아직 없으면 현재가를 시초가로 설정
       GROUPS.forEach(g => {
-        ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+        ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
           const k = `G${g.id}${suf}`;
           updates[`state/openPrice/${k}`] = fbState.prices?.[k] ?? (suf ? 20 : 100);
         });
@@ -1560,7 +1555,7 @@ function startPriceTick() {
     // ── 캔들 데이터 기록 ──────────────────────────────
     const candleKey = Math.floor(now / 10000); // 10초 단위 키
     GROUPS.forEach(g => {
-      ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+      ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
         const k = `G${g.id}${suf}`;
         const newP = updates[`state/prices/${k}`] ?? fbState.prices?.[k] ?? 0;
         const oldP = fbState.prices?.[k] ?? newP;
@@ -1577,7 +1572,7 @@ function startPriceTick() {
     });
     // 캔들 최대 200개 유지 (오래된 것 삭제)
     GROUPS.forEach(g => {
-      ['', '_INV', '_LEV', '_INV100', '_LEV100'].forEach(suf => {
+      ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
         const k = `G${g.id}${suf}`;
         const candlesForTicker = fbState.candles?.[k] ?? {};
         const keys = Object.keys(candlesForTicker).map(Number).sort((a,b)=>a-b);
@@ -1635,7 +1630,6 @@ function getStocks() {
     { ticker:`G${g.id}_INV`,    name:`${g.id}모둠 인버스`,          desc:`${g.id}모둠 주식이 1% 떨어지면 1% 올라요`,                         type:'inv',      group:g.id, color:GROUP_COLORS[i] },
     { ticker:`G${g.id}_LEV`,    name:`${g.id}모둠 레버리지`,        desc:`${g.id}모둠 주식이 변할 때 2배만큼 변해요`,                         type:'lev',      group:g.id, color:GROUP_COLORS[i] },
     { ticker:`G${g.id}_INV100`, name:`${g.id}모둠 100배 인버스`,    desc:`${g.id}모둠 주식과 100배 반대로 움직여요 (초고위험!)`,              type:'inv100',   group:g.id, color:GROUP_COLORS[i] },
-    { ticker:`G${g.id}_LEV100`, name:`${g.id}모둠 100배 레버리지`,  desc:`${g.id}모둠 주식이 변할 때 100배만큼 변해요 (초고위험!)`,           type:'lev100',   group:g.id, color:GROUP_COLORS[i] },
   ]);
 }
 
@@ -2373,8 +2367,48 @@ window.setMobileTradeType = function setMobileTradeType(type, ticker) {
 
 // 거래 패널 내용만 (모달용)
 
+
+// ── LEV100 보유 학생 강제 매도 + Firebase 데이터 정리 ────
+window.forceSellAllLev100 = async function() {
+  const updates = {};
+  let count = 0;
+  const allStudents = [...(window.ALL_STUDENTS ?? []).map(s => s.name), '김민재 선생님'];
+  allStudents.forEach(name => {
+    const stu = fbState.students?.[name];
+    if (!stu) return;
+    const holdings = stu.holdings ?? {};
+    let changed = false;
+    const hist = [...(stu.history ?? [])];
+    GROUPS.forEach(g => {
+      const ticker = 'G' + g.id + '_LEV100';
+      const qty = holdings[ticker] ?? 0;
+      if (qty > 0) {
+        const price = fbState.prices?.[ticker] ?? 20;
+        const total = qty * price;
+        updates['state/students/' + name + '/deposit'] =
+          ((updates['state/students/' + name + '/deposit'] ?? stu.deposit ?? 0) + total);
+        updates['state/students/' + name + '/holdings/' + ticker] = 0;
+        hist.push({ type:'sell', ticker, qty, price, total,
+          date: new Date().toLocaleString('ko-KR'), forcedDelisted: true });
+        changed = true;
+        count++;
+      }
+      // Firebase 가격 데이터 정리
+      updates['state/prices/' + ticker]     = null;
+      updates['state/prevPrices/' + ticker] = null;
+      updates['state/dailyClose/' + ticker] = null;
+      updates['state/openPrice/' + ticker]  = null;
+      updates['state/hourlyBase/' + ticker] = null;
+      updates['state/candles/' + ticker]    = null;
+    });
+    if (changed) updates['state/students/' + name + '/history'] = hist;
+  });
+  await update(ref(db), updates);
+  showToast('LEV100 강제매도 완료 (' + count + '건) 및 상품 삭제', 'success');
+};
+
 // ══════════════════════════════════════════════════════════
-// 공매도 시스템 (선생님 전용)
+// 공매도 시스템
 // ══════════════════════════════════════════════════════════
 const TEACHER_NAME = '김민재 선생님';
 const SHORT_FORCE_CLOSE_RATIO = 2.0; // 공매도 단가 200% 이상 오르면 강제청산
@@ -2422,7 +2456,6 @@ async function checkShortForceClose() {
 
 // 공매도 실행
 window.executeShortSell = async function(ticker) {
-  if (currentUser !== TEACHER_NAME) return showToast('선생님만 공매도 가능합니다', 'error');
   const qty = parseInt(document.getElementById('trade-qty')?.value ||
                        document.getElementById('modal-trade-qty')?.value) || 0;
   if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
@@ -2430,15 +2463,15 @@ window.executeShortSell = async function(ticker) {
   if (price <= 0) return showToast('현재가 오류', 'error');
   const total = qty * price;
   const stu   = fbState.students?.[TEACHER_NAME] ?? {};
-  const existPos = fbState.shortPositions?.[TEACHER_NAME]?.[ticker] ?? { qty: 0, avgShortPrice: 0 };
+  const existPos = fbState.shortPositions?.[currentUser]?.[ticker] ?? { qty: 0, avgShortPrice: 0 };
   const newQty = existPos.qty + qty;
   const newAvg = ((existPos.qty * existPos.avgShortPrice) + (qty * price)) / newQty;
   const updates = {};
   // 예금에 공매도 대금 입금
-  updates['state/students/' + TEACHER_NAME + '/deposit'] =
+  updates['state/students/' + currentUser + '/deposit'] =
     Math.round(((stu.deposit ?? 0) + total) * 100) / 100;
   // 숏포지션 기록
-  updates['state/shortPositions/' + TEACHER_NAME + '/' + ticker] = {
+  updates['state/shortPositions/' + currentUser + '/' + ticker] = {
     qty: newQty, avgShortPrice: Math.round(newAvg * 100) / 100
   };
   // 가격 반영 (공매도 매도 = 하방압력, 2배 가중)
@@ -2452,7 +2485,7 @@ window.executeShortSell = async function(ticker) {
     type: 'short-sell', ticker, qty, price, total,
     date: new Date().toLocaleString('ko-KR')
   }];
-  updates['state/students/' + TEACHER_NAME + '/history'] = hist;
+  updates['state/students/' + currentUser + '/history'] = hist;
   await update(ref(db), updates);
   showToast('공매도 ' + qty + '주 @ ' + fmtF(price) + '점 ↓', 'success');
   renderCurrentTab();
@@ -2460,8 +2493,7 @@ window.executeShortSell = async function(ticker) {
 
 // 공매도 청산 (환매수)
 window.executeShortCover = async function(ticker) {
-  if (currentUser !== TEACHER_NAME) return showToast('선생님만 사용 가능합니다', 'error');
-  const pos = fbState.shortPositions?.[TEACHER_NAME]?.[ticker];
+  const pos = fbState.shortPositions?.[currentUser]?.[ticker];
   if (!pos || pos.qty <= 0) return showToast('청산할 포지션이 없습니다', 'error');
   const qty = parseInt(document.getElementById('trade-qty')?.value ||
                        document.getElementById('modal-trade-qty')?.value) || 0;
@@ -2475,8 +2507,8 @@ window.executeShortCover = async function(ticker) {
   if (newDeposit < 0) return showToast('예금이 부족합니다 (필요: ' + fmtF(cost) + '점)', 'error');
   const newQty = pos.qty - qty;
   const updates = {};
-  updates['state/students/' + TEACHER_NAME + '/deposit'] = newDeposit;
-  updates['state/shortPositions/' + TEACHER_NAME + '/' + ticker] =
+  updates['state/students/' + currentUser + '/deposit'] = newDeposit;
+  updates['state/shortPositions/' + currentUser + '/' + ticker] =
     newQty > 0 ? { qty: newQty, avgShortPrice: pos.avgShortPrice } : null;
   // 가격 반영 (환매수 = 상방압력)
   const curTrades = fbState.lastTrades?.[ticker] ?? [];
@@ -2489,7 +2521,7 @@ window.executeShortCover = async function(ticker) {
     type: 'short-cover', ticker, qty, price: curPrice, total: cost,
     pnl, date: new Date().toLocaleString('ko-KR')
   }];
-  updates['state/students/' + TEACHER_NAME + '/history'] = hist;
+  updates['state/students/' + currentUser + '/history'] = hist;
   await update(ref(db), updates);
   const sign = pnl >= 0 ? '+' : '';
   showToast('공매도 청산 ' + qty + '주 | 손익 ' + sign + fmtF(pnl) + '점', pnl >= 0 ? 'success' : 'error');
@@ -2499,7 +2531,7 @@ window.executeShortCover = async function(ticker) {
 // 공매도 포지션 렌더
 function renderShortPositions(ticker) {
   if (currentUser !== TEACHER_NAME) return '';
-  const positions = fbState.shortPositions?.[TEACHER_NAME] ?? {};
+  const positions = fbState.shortPositions?.[currentUser] ?? {};
   const filtered  = ticker ? { [ticker]: positions[ticker] } : positions;
   let html = '';
   Object.entries(filtered).forEach(([tk, pos]) => {
@@ -2558,9 +2590,7 @@ function renderTradePanelContent(ticker) {
   }
 
   const isShortMode = (activeOrderType === 'short');
-  const shortTabBtn = currentUser === TEACHER_NAME
-    ? '<button class="order-type-tab'+(isShortMode?' active':'')+'" data-modal-action="order-short" data-ticker="'+ticker+'" style="'+(isShortMode?'color:#fff;background:var(--purple);':'color:var(--purple);;')+'">공매도</button>'
-    : '';
+  const shortTabBtn = '<button class="order-type-tab'+(isShortMode?' active':'')+'" data-modal-action="order-short" data-ticker="'+ticker+'" style="'+(isShortMode?'color:#fff;background:var(--purple);':'color:var(--purple);')+'">공매도</button>';
   const orderTabHtml =
     '<div class="order-type-tabs">' +
     '<button class="order-type-tab'+(!isLimit && !isShortMode?' active':'')+'" data-modal-action="order-market" data-ticker="'+ticker+'">시장가</button>' +
@@ -2581,7 +2611,7 @@ function renderTradePanelContent(ticker) {
 
   const btnAction = isLimit ? 'modal-limit' : isShortMode ? 'modal-short' : 'modal-trade';
   const btnDisabled = !fbState.marketOpen ? 'disabled' : '';
-  const shortPos = fbState.shortPositions?.[TEACHER_NAME]?.[ticker];
+  const shortPos = fbState.shortPositions?.[currentUser]?.[ticker];
 
   // 공매도 모드 UI
   if (isShortMode) {
@@ -2918,8 +2948,7 @@ function renderMarket() {
     <div class="stocks-2col">${stocks.filter(s=>s.type==='lev').map(row).join('')}</div>
     <div class="section-title" style="color:var(--red);">⚠️ 100배 인버스 (초고위험)</div>
     <div class="stocks-2col">${stocks.filter(s=>s.type==='inv100').map(row).join('')}</div>
-    <div class="section-title" style="color:var(--red);">⚠️ 100배 레버리지 (초고위험)</div>
-    <div class="stocks-2col">${stocks.filter(s=>s.type==='lev100').map(row).join('')}</div>`;
+`;
 
   return `<div class="market-grid"><div class="market-left">${stockList}</div>${rightPanel}</div>`;
 }
@@ -3591,6 +3620,16 @@ window.doLogout = function() {
 // ── 시작 ─────────────────────────────────────────────
 await ensureInitialized();
 subscribeState();
+// LEV100 상품 폐지 - 앱 시작 시 자동 정리
+setTimeout(async () => {
+  if (fbState?.prices) {
+    const hasLev100 = GROUPS.some(g => (fbState.prices?.['G' + g.id + '_LEV100'] ?? null) !== null);
+    if (hasLev100) {
+      console.log('LEV100 상품 정리 중...');
+      await window.forceSellAllLev100?.();
+    }
+  }
+}, 3000);
 
 // ── 스플래시 스크린 ───────────────────────────────────
 (function() {
