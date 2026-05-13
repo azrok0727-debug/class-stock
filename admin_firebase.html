@@ -606,7 +606,6 @@ function renderStocks() {
             ['',`G${g.id}`,g.name,'기본주식'],
             ['_INV',`G${g.id}_INV`,`${g.name} 인버스`,'인버스'],
             ['_LEV',`G${g.id}_LEV`,`${g.name} 레버리지`,'레버리지'],
-            ['_INV100',`G${g.id}_INV100`,`${g.name} 100배 인버스`,'100x 인버스'],
 
           ].map(([,key,label,type]) => `<tr>
             <td><span style="font-family:'Space Grotesk',sans-serif;color:${GROUP_COLORS[i]}">${key}</span></td>
@@ -957,7 +956,6 @@ function renderSplit() {
     stocks.push({ ticker: 'G' + g.id,           name: g.id + '모둠 (기본)',         type: 'base' });
     stocks.push({ ticker: 'G' + g.id + '_INV',    name: g.id + '모둠 인버스',         type: 'inv' });
     stocks.push({ ticker: 'G' + g.id + '_LEV',    name: g.id + '모둠 레버리지',       type: 'lev' });
-    stocks.push({ ticker: 'G' + g.id + '_INV100', name: g.id + '모둠 100배 인버스',   type: 'inv100' });
 
   });
 
@@ -1598,12 +1596,12 @@ async function deleteNotice(id) {
 // ── 관리자 차트 ────────────────────────────────────────
 let adminChartPeriod = '10m';
 const GROUP_NAMES_ADMIN = {
-  'G1':'1모둠','G1_INV':'1모둠 인버스','G1_LEV':'1모둠 레버리지','G1_INV100':'1모둠 100x인버스',
-  'G2':'2모둠','G2_INV':'2모둠 인버스','G2_LEV':'2모둠 레버리지','G2_INV100':'2모둠 100x인버스',
-  'G3':'3모둠','G3_INV':'3모둠 인버스','G3_LEV':'3모둠 레버리지','G3_INV100':'3모둠 100x인버스',
-  'G4':'4모둠','G4_INV':'4모둠 인버스','G4_LEV':'4모둠 레버리지','G4_INV100':'4모둠 100x인버스',
-  'G5':'5모둠','G5_INV':'5모둠 인버스','G5_LEV':'5모둠 레버리지','G5_INV100':'5모둠 100x인버스',
-  'G6':'6모둠','G6_INV':'6모둠 인버스','G6_LEV':'6모둠 레버리지','G6_INV100':'6모둠 100x인버스',
+  'G1':'1모둠','G1_INV':'1모둠 인버스','G1_LEV':'1모둠 레버리지',
+  'G2':'2모둠','G2_INV':'2모둠 인버스','G2_LEV':'2모둠 레버리지',
+  'G3':'3모둠','G3_INV':'3모둠 인버스','G3_LEV':'3모둠 레버리지',
+  'G4':'4모둠','G4_INV':'4모둠 인버스','G4_LEV':'4모둠 레버리지',
+  'G5':'5모둠','G5_INV':'5모둠 인버스','G5_LEV':'5모둠 레버리지',
+  'G6':'6모둠','G6_INV':'6모둠 인버스','G6_LEV':'6모둠 레버리지',
 };
 
 function getAdminCandles(ticker, period) {
@@ -1894,12 +1892,10 @@ async function doReset(type) {
       updates[`state/prices/G${g.id}`]          = 100;
       updates[`state/prices/G${g.id}_INV`]      = 20;
       updates[`state/prices/G${g.id}_LEV`]      = 20;
-      updates[`state/prices/G${g.id}_INV100`]   = 20;
       updates[`state/prices/G${g.id}_LEV100`]   = 20;
       updates[`state/prevPrices/G${g.id}`]      = 100;
       updates[`state/prevPrices/G${g.id}_INV`]  = 20;
       updates[`state/prevPrices/G${g.id}_LEV`]  = 20;
-      updates[`state/prevPrices/G${g.id}_INV100`] = 20;
       updates[`state/prevPrices/G${g.id}_LEV100`] = 20;
     });
   }
@@ -1913,7 +1909,7 @@ async function doReset(type) {
   // ── 전일 대비 초기화: 현재가를 기준가로 재설정 ────────
   if (type === 'dailyclose' || type === 'chartall' || type === 'all') {
     GROUPS.forEach(g => {
-      ['', '_INV', '_LEV', '_INV100'].forEach(suf => {
+      ['', '_INV', '_LEV'].forEach(suf => {
         const k = `G${g.id}${suf}`;
         const curP = fbState.prices?.[k] ?? (suf ? 20 : 100);
         updates[`state/dailyClose/${k}`]  = curP;
