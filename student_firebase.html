@@ -2192,11 +2192,16 @@ window.openChartModal = function openChartModal(ticker) {
     e.stopPropagation();
     var action = btn.dataset.modalAction;
     var tk = btn.dataset.ticker;
-    if (action === 'modal-trade') executeModalTrade(tk);
-    else if (action === 'modal-limit') placeModalLimitOrder(tk);
-    else if (action === 'max') setModalMaxQty(tk);
-    else if (action === 'order-market') setModalOrderType('market', tk);
-    else if (action === 'order-limit') setModalOrderType('limit', tk);
+    if (action==='modal-trade')   executeModalTrade(tk);
+    else if (action==='modal-limit')  placeModalLimitOrder(tk);
+    else if (action==='modal-short')  window.executeShortSell(tk);
+    else if (action==='modal-cover')  window.executeShortCover(tk);
+    else if (action==='max')          setModalMaxQty(tk);
+    else if (action==='order-market') setModalOrderType('market',tk);
+    else if (action==='order-limit')  setModalOrderType('limit',tk);
+    else if (action==='order-short')  setModalOrderType('short',tk);
+    else if (action==='cancel-limit') cancelLimitOrder(decodeURIComponent(btn.dataset.orderId));
+    else if (action==='trade-type')   setMobileTradeType(btn.dataset.type, tk);
   }
   modal.addEventListener('click', handleModalAction);
   modal.addEventListener('touchend', handleModalAction, {passive:false});
