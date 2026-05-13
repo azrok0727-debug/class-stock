@@ -1092,10 +1092,6 @@ canvas.chart-canvas{display:block;width:100%;}
   border:1px solid var(--border);
   border-radius:10px;margin-bottom:6px;font-size:12px;font-weight:600;
 }
-.short-badge{display:inline-block;padding:2px 8px;background:rgba(170,112,255,0.2);border:1px solid var(--purple);border-radius:6px;font-size:11px;color:var(--purple);font-weight:700;}
-.short-pos-card{background:rgba(170,112,255,0.08);border:1.5px solid var(--purple);border-radius:12px;padding:12px;margin-bottom:8px;}
-.btn-short{width:100%;padding:12px;background:linear-gradient(135deg,#7b2ff7,#aa70ff);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
-.btn-cover{width:100%;padding:12px;background:linear-gradient(135deg,#ff7b2f,#ffa040);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
 .pending-order-cancel{
   padding:5px 12px;
   background:transparent;
@@ -1131,6 +1127,10 @@ option,optgroup{background:#1a1f3a!important;color:var(--text)!important;}
 .num,.s-price,.s-change,.metric-value,.h-stat-val,.rank-total,.hist-total,.chart-modal-price,.chart-side-price{
   font-feature-settings:"tnum" 1;font-variant-numeric:tabular-nums;
 }
+.short-badge{display:inline-block;padding:2px 8px;background:rgba(170,112,255,0.2);border:1px solid var(--purple);border-radius:6px;font-size:11px;color:var(--purple);font-weight:700;}
+.short-pos-card{background:rgba(170,112,255,0.08);border:1.5px solid var(--purple);border-radius:12px;padding:12px;margin-bottom:8px;}
+.btn-short{width:100%;padding:12px;background:#7b2ff7;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-cover{width:100%;padding:12px;background:#ff7b2f;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
 </style>
 </head>
 <body>
@@ -1299,14 +1299,17 @@ function buildDefaultState() {
   const prices = {}, prevPrices = {}, shareSupply = {}, dailyClose = {};
   GROUPS.forEach(g => {
     prices[`G${g.id}`]       = 100;
-    prices[`G${g.id}_INV`]   = 20;
-    prices[`G${g.id}_LEV`]   = 20;
+    prices[`G${g.id}_INV`]    = 20;
+    prices[`G${g.id}_LEV`]    = 20;
+    prices[`G${g.id}_INV100`] = 20;
     prevPrices[`G${g.id}`]   = 100;
-    prevPrices[`G${g.id}_INV`] = 20;
-    prevPrices[`G${g.id}_LEV`] = 20;
+    prevPrices[`G${g.id}_INV`]    = 20;
+    prevPrices[`G${g.id}_LEV`]    = 20;
+    prevPrices[`G${g.id}_INV100`] = 20;
     dailyClose[`G${g.id}`]   = 100;
-    dailyClose[`G${g.id}_INV`] = 20;
-    dailyClose[`G${g.id}_LEV`] = 20;
+    dailyClose[`G${g.id}_INV`]    = 20;
+    dailyClose[`G${g.id}_LEV`]    = 20;
+    dailyClose[`G${g.id}_INV100`] = 20;
     shareSupply[`G${g.id}`]  = 60;
   });
   return { students, groups, prices, prevPrices, dailyClose, shareSupply, marketOpen:false };
@@ -1396,6 +1399,81 @@ function subscribeState() {
 }
 
 // ── 10초 가격 틱 (관리자가 아닌 첫 접속자가 담당) ────────
+
+// ── 공매도 ──────────────────────────────────────────────
+async function checkShortForceClose() {
+  const allS = fbState.shortPositions ?? {};
+  const upd = {}; let anyClose = false;
+  for (const [uid, pos] of Object.entries(allS)) {
+    if (!pos) continue;
+    for (const [tk, p] of Object.entries(pos)) {
+      if (!p?.qty) continue;
+      const cp = fbState.prices?.[tk] ?? 0;
+      if (cp >= p.avgShortPrice * 2.0) {
+        const stu = fbState.students?.[uid] ?? {};
+        const pnl = (p.avgShortPrice - cp) * p.qty;
+        upd['state/students/'+uid+'/deposit'] = Math.round(((stu.deposit??0)+pnl)*100)/100;
+        upd['state/shortPositions/'+uid+'/'+tk] = null;
+        upd['state/students/'+uid+'/history'] = [...(stu.history??[]),{type:'short-cover',ticker:tk,qty:p.qty,price:cp,total:p.qty*cp,pnl:Math.round(pnl),forced:true,date:new Date().toLocaleString('ko-KR')}];
+        anyClose = true;
+      }
+    }
+  }
+  if (anyClose) { await update(ref(db), upd); showToast('공매도 강제청산!','error'); }
+}
+
+function renderShortPositions(ticker) {
+  const pos = fbState.shortPositions?.[currentUser] ?? {};
+  const list = ticker ? (pos[ticker]?{[ticker]:pos[ticker]}:{}) : pos;
+  let h = '';
+  Object.entries(list).forEach(([tk,p]) => {
+    if (!p?.qty) return;
+    const cp=fbState.prices?.[tk]??0, pnl=(p.avgShortPrice-cp)*p.qty, up=pnl>=0;
+    h+='<div class="short-pos-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;"><b>'+tk+' 공매도</b><span class="short-badge">SHORT</span></div><div style="font-size:12px;color:var(--text2);line-height:1.8;">'+p.qty+'주 @ '+fmtF(p.avgShortPrice)+'점 | 현재가 '+fmtF(cp)+'점<br>손익: <b style="color:'+(up?'var(--green)':'var(--red)')+';">'+(up?'+':'')+fmtF(Math.round(pnl))+'점</b> | 강제청산: '+fmtF(p.avgShortPrice*2)+'점</div></div>';
+  });
+  return h;
+}
+
+window.executeShortSell = async function(ticker) {
+  const qEl=document.getElementById('modal-trade-qty')||document.getElementById('trade-qty');
+  const qty=parseInt(qEl?.value??'0')||0;
+  if(qty<=0) return showToast('수량을 입력해주세요','error');
+  const price=fbState.prices?.[ticker]??0;
+  if(price<=0) return showToast('현재가 오류','error');
+  const stu=fbState.students?.[currentUser]??{};
+  const ep=fbState.shortPositions?.[currentUser]?.[ticker]??{qty:0,avgShortPrice:0};
+  const nq=ep.qty+qty, na=ep.qty>0?((ep.qty*ep.avgShortPrice)+(qty*price))/nq:price;
+  const upd={};
+  upd['state/students/'+currentUser+'/deposit']=Math.round(((stu.deposit??0)+qty*price)*100)/100;
+  upd['state/shortPositions/'+currentUser+'/'+ticker]={qty:nq,avgShortPrice:Math.round(na*100)/100};
+  if(!ticker.includes('_INV')&&!ticker.includes('_LEV')){const ct=fbState.lastTrades?.[ticker]??[];upd['state/lastTrades/'+ticker]=[{qty:qty*2,price,side:'sell',isShort:true,ts:Date.now()},...ct];}
+  upd['state/students/'+currentUser+'/history']=[...(stu.history??[]),{type:'short-sell',ticker,qty,price,total:qty*price,date:new Date().toLocaleString('ko-KR')}];
+  await update(ref(db),upd);
+  showToast('공매도 '+qty+'주 @ '+fmtF(price)+'점','success');
+  renderCurrentTab();
+};
+
+window.executeShortCover = async function(ticker) {
+  const pos=fbState.shortPositions?.[currentUser]?.[ticker];
+  if(!pos?.qty) return showToast('청산할 포지션이 없습니다','error');
+  const qEl=document.getElementById('modal-trade-qty')||document.getElementById('trade-qty');
+  const qty=parseInt(qEl?.value??'0')||0;
+  if(qty<=0) return showToast('수량을 입력해주세요','error');
+  if(qty>pos.qty) return showToast('포지션 수량('+pos.qty+'주)보다 많습니다','error');
+  const cp=fbState.prices?.[ticker]??0, pnl=Math.round((pos.avgShortPrice-cp)*qty*100)/100;
+  const stu=fbState.students?.[currentUser]??{};
+  const nd=Math.round(((stu.deposit??0)-qty*cp)*100)/100;
+  if(nd<0) return showToast('예금 부족 (필요: '+fmtF(qty*cp)+'점)','error');
+  const upd={};
+  upd['state/students/'+currentUser+'/deposit']=nd;
+  upd['state/shortPositions/'+currentUser+'/'+ticker]=(pos.qty-qty)>0?{qty:pos.qty-qty,avgShortPrice:pos.avgShortPrice}:null;
+  if(!ticker.includes('_INV')&&!ticker.includes('_LEV')){const ct=fbState.lastTrades?.[ticker]??[];upd['state/lastTrades/'+ticker]=[{qty,price:cp,side:'buy',isShort:true,ts:Date.now()},...ct];}
+  upd['state/students/'+currentUser+'/history']=[...(stu.history??[]),{type:'short-cover',ticker,qty,price:cp,total:qty*cp,pnl,date:new Date().toLocaleString('ko-KR')}];
+  await update(ref(db),upd);
+  showToast('청산 | 손익 '+(pnl>=0?'+':'')+fmtF(pnl)+'점',pnl>=0?'success':'error');
+  renderCurrentTab();
+};
+
 function startPriceTick() {
   if (tickTimer) return;
   tickTimer = setInterval(async () => {
@@ -1427,32 +1505,19 @@ function startPriceTick() {
 
       // ── 상한가/하한가 (1시간 기준 ±50%) ─────────────
       const hourBase = fbState.hourlyBase?.[key] ?? cur;
-      const upperLimit = Math.round(hourBase * 1.5 * 10) / 10;
-      const lowerLimit = Math.max(1, Math.round(hourBase * 0.5 * 10) / 10);
+      const upperLimit = Math.round(hourBase * 1.5 * 10) / 10;  // +50%
+      const lowerLimit = Math.max(1, Math.round(hourBase * 0.5 * 10) / 10); // -50%
 
-      // ── 거래량 기반 가격 결정 ────────────────────────
+      // ── 수요/공급 압력 계산 ──────────────────────────
       const lastTrades = fbState.lastTrades?.[key] ?? [];
       let newBase;
       if (lastTrades.length > 0) {
-        const shortTrades  = lastTrades.filter(t => t.isShort);
-        const normalTrades = lastTrades.filter(t => !t.isShort);
-        let totalQty = 0, totalAmount = 0;
-        normalTrades.forEach(t => { totalQty += t.qty; totalAmount += t.qty * t.price; });
-        shortTrades.forEach(t => { totalQty += t.qty * 2; totalAmount += t.qty * 2 * t.price; });
-        const vwap = totalQty > 0 ? totalAmount / totalQty : cur;
-        let netBuy = 0, netSell = 0;
-        lastTrades.forEach(t => {
-          const w = t.isShort ? 2 : 1;
-          if (t.side === 'buy')  netBuy  += t.qty * t.price * w;
-          if (t.side === 'sell') netSell += t.qty * t.price * w;
-        });
-        const totalVol = netBuy + netSell;
-        const imbalance = totalVol > 0 ? (netBuy - netSell) / totalVol : 0;
-        newBase = Math.round((vwap * (1 + imbalance * 0.15)) * 10) / 10;
+        let tq=0,ta=0,nb=0,ns=0;
+        lastTrades.forEach(t=>{const w=t.isShort?2:1;tq+=t.qty*w;ta+=t.qty*w*t.price;if(t.side==='buy')nb+=t.qty*t.price*w;else ns+=t.qty*t.price*w;});
+        const vwap=tq>0?ta/tq:cur,tv=nb+ns,imb=tv>0?(nb-ns)/tv:0;
+        newBase=Math.round((vwap*(1+imb*0.15))*10)/10;
       } else {
-        const noise = (Math.random() - 0.5) * 0.03;
-        const drift = (fundamental - cur) * 0.10;
-        newBase = Math.round((cur + drift + cur * noise) * 10) / 10;
+        newBase=Math.round((cur+(fundamental-cur)*0.10+cur*(Math.random()-0.5)*0.03)*10)/10;
       }
 
       // 상한가/하한가 적용
@@ -1463,30 +1528,29 @@ function startPriceTick() {
 
       // 인버스/레버리지도 상한가/하한가 적용
       const curInv = fbState.prices?.[key + '_INV'] ?? 20;
+      const curInv100 = fbState.prices?.[key + '_INV100'] ?? 20;
+      const hbInv100 = fbState.hourlyBase?.[key+'_INV100'] ?? curInv100;
       const curLev = fbState.prices?.[key + '_LEV'] ?? 20;
       const hourBaseInv = fbState.hourlyBase?.[key + '_INV'] ?? curInv;
       const hourBaseLev = fbState.hourlyBase?.[key + '_LEV'] ?? curLev;
 
-      const curInv100    = fbState.prices?.[key + '_INV100'] ?? 20;
-      const hourBaseInv100 = fbState.hourlyBase?.[key + '_INV100'] ?? curInv100;
-      let newInv    = Math.round(curInv    * (1 - basePct)       * 10) / 10;
-      let newLev    = Math.round(curLev    * (1 + basePct * 2)   * 10) / 10;
-      let newInv100 = Math.round(curInv100 * (1 - basePct * 100) * 10) / 10;
+      let newInv = Math.round(curInv * (1 - basePct) * 10) / 10;
+      let newLev = Math.round(curLev * (1 + basePct * 2) * 10) / 10;
 
       newInv = Math.max(Math.max(1, Math.round(hourBaseInv * 0.5 * 10) / 10),
                 Math.min(Math.round(hourBaseInv * 1.5 * 10) / 10, newInv));
       newLev = Math.max(Math.max(1, Math.round(hourBaseLev * 0.5 * 10) / 10),
                 Math.min(Math.round(hourBaseLev * 1.5 * 10) / 10, newLev));
-      newInv100 = Math.max(Math.max(1, Math.round(hourBaseInv100 * 0.1 * 10) / 10),
-                Math.min(Math.round(hourBaseInv100 * 1.9 * 10) / 10, newInv100));
 
-      updates['state/prices/' + key]             = newBase;
-      updates['state/prices/' + key + '_INV']    = newInv;
-      updates['state/prices/' + key + '_LEV']    = newLev;
-      updates['state/prices/' + key + '_INV100'] = newInv100;
+      let newI100=Math.round(curInv100*(1-(basePct*100))*10)/10;
+      newI100=Math.max(Math.max(1,Math.round(hbInv100*0.1*10)/10),Math.min(Math.round(hbInv100*1.9*10)/10,newI100));
+      updates['state/prices/'+key]=newBase;
+      updates['state/prices/'+key+'_INV']=newInv;
+      updates['state/prices/'+key+'_LEV']=newLev;
+      updates['state/prices/'+key+'_INV100']=newI100;
 
       // 압력 소멸
-      updates['state/lastTrades/' + key] = null;
+      updates['state/lastTrades/'+key]=null;
       updates['state/tickPressure/' + key] = 0;
     });
     // 이전 가격 저장
@@ -1553,7 +1617,6 @@ function startPriceTick() {
     });
     // 지정가 체결 체크
     await checkLimitOrders();
-    // 공매도 강제청산 체크
     await checkShortForceClose();
     await update(ref(db), updates);
   }, 10000);
@@ -1594,10 +1657,10 @@ function initVal(gid) {
 }
 function getStocks() {
   return GROUPS.flatMap((g, i) => [
-    { ticker:`G${g.id}`,        name:`${g.id}모둠`,           desc:`${g.id}모둠이 점수를 모을수록 가격이 올라요`,         type:'base',   group:g.id, color:GROUP_COLORS[i] },
-    { ticker:`G${g.id}_INV`,    name:`${g.id}모둠 인버스`,    desc:`${g.id}모둠 주식이 1% 떨어지면 1% 올라요`,           type:'inv',    group:g.id, color:GROUP_COLORS[i] },
-    { ticker:`G${g.id}_LEV`,    name:`${g.id}모둠 레버리지`,  desc:`${g.id}모둠 주식이 변할 때 2배만큼 변해요`,          type:'lev',    group:g.id, color:GROUP_COLORS[i] },
-    { ticker:`G${g.id}_INV100`, name:`${g.id}모둠 100배 인버스`, desc:`${g.id}모둠 주식과 100배 반대로 움직여요!`,       type:'inv100', group:g.id, color:GROUP_COLORS[i] },
+    { ticker:`G${g.id}`, name:`${g.id}모둠`, desc:`${g.id}모둠이 점수를 모을수록 가격이 올라요`, type:'base', group:g.id, color:GROUP_COLORS[i] },
+    { ticker:`G${g.id}_INV`, name:`${g.id}모둠 인버스`, desc:`${g.id}모둠의 주식 가격이 떨어지면 가격이 올라요`, type:'inv', group:g.id, color:GROUP_COLORS[i] },
+    { ticker:`G${g.id}_LEV`,    name:`${g.id}모둠 레버리지`,     desc:`${g.id}모둠의 주식 가격이 변할때, 2배만큼 변해요`, type:'lev',    group:g.id, color:GROUP_COLORS[i] },
+    { ticker:`G${g.id}_INV100`, name:`${g.id}모둠 100배 인버스`, desc:`${g.id}모둠 주식과 100배 반대로 움직여요!`,         type:'inv100', group:g.id, color:GROUP_COLORS[i] },
   ]);
 }
 
@@ -2322,152 +2385,6 @@ window.setMobileTradeType = function setMobileTradeType(type, ticker) {
 }
 
 // 거래 패널 내용만 (모달용)
-
-// ── 평균매수가 계산 ────────────────────────────────────────
-function calcAvgBuyPrice(history, ticker) {
-  if (!history || !history.length) return 0;
-  let totalBought = 0, totalQty = 0;
-  history.forEach(h => {
-    if (h.ticker === ticker && h.type === 'buy') {
-      totalBought += h.total; totalQty += h.qty;
-    }
-  });
-  return totalQty > 0 ? totalBought / totalQty : 0;
-}
-
-// ── lastTrades 기록 helper ─────────────────────────────────
-async function recordTrade(ticker, qty, price, side, isShort) {
-  if (ticker.includes('_INV') || ticker.includes('_LEV')) return;
-  const cur = fbState.lastTrades?.[ticker] ?? [];
-  const entry = { qty, price, side, ts: Date.now() };
-  if (isShort) entry.isShort = true;
-  // 공매도는 앞에, 일반은 뒤에
-  const newList = isShort ? [entry, ...cur] : [...cur, entry];
-  await update(ref(db, 'state/lastTrades/' + ticker), null); // 먼저 초기화
-  await update(ref(db, 'state/lastTrades'), { [ticker]: newList });
-}
-
-// ── 공매도 ─────────────────────────────────────────────────
-async function checkShortForceClose() {
-  const allShorts = fbState.shortPositions ?? {};
-  const updates = {};
-  let anyClose = false;
-  for (const [userId, positions] of Object.entries(allShorts)) {
-    if (!positions) continue;
-    for (const [ticker, pos] of Object.entries(positions)) {
-      if (!pos || !pos.qty) continue;
-      const curPrice = fbState.prices?.[ticker] ?? 0;
-      if (curPrice >= pos.avgShortPrice * 2.0) {
-        const stu = fbState.students?.[userId] ?? {};
-        const pnl = (pos.avgShortPrice - curPrice) * pos.qty;
-        updates['state/students/' + userId + '/deposit'] =
-          Math.round(((stu.deposit ?? 0) + pnl) * 100) / 100;
-        updates['state/shortPositions/' + userId + '/' + ticker] = null;
-        const hist = [...(stu.history ?? []), {
-          type:'short-cover', ticker, qty:pos.qty, price:curPrice,
-          total:pos.qty*curPrice, pnl:Math.round(pnl), forced:true,
-          date:new Date().toLocaleString('ko-KR')
-        }];
-        updates['state/students/' + userId + '/history'] = hist;
-        anyClose = true;
-      }
-    }
-  }
-  if (anyClose) { await update(ref(db), updates); showToast('⚠️ 공매도 강제청산!', 'error'); }
-}
-
-function renderShortPositions(ticker) {
-  const positions = fbState.shortPositions?.[currentUser] ?? {};
-  const filtered = ticker ? (positions[ticker] ? {[ticker]: positions[ticker]} : {}) : positions;
-  let html = '';
-  Object.entries(filtered).forEach(([tk, pos]) => {
-    if (!pos || !pos.qty) return;
-    const curPrice = fbState.prices?.[tk] ?? 0;
-    const pnl = (pos.avgShortPrice - curPrice) * pos.qty;
-    const up = pnl >= 0;
-    html += '<div class="short-pos-card">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">' +
-        '<b style="font-size:13px;">' + tk + ' 공매도</b><span class="short-badge">SHORT</span>' +
-      '</div>' +
-      '<div style="font-size:12px;color:var(--text2);line-height:1.8;">' +
-        pos.qty + '주 @ ' + fmtF(pos.avgShortPrice) + '점 | 현재가 ' + fmtF(curPrice) + '점<br>' +
-        '손익: <b style="color:' + (up?'var(--green)':'var(--red)') + ';">' + (up?'+':'') + fmtF(Math.round(pnl)) + '점</b>' +
-        ' | 강제청산: ' + fmtF(pos.avgShortPrice * 2) + '점 이상' +
-      '</div>' +
-    '</div>';
-  });
-  return html;
-}
-
-window.executeShortSell = async function(ticker) {
-  const qtyEl = document.getElementById('modal-trade-qty') || document.getElementById('trade-qty');
-  const qty = parseInt(qtyEl?.value ?? '0') || 0;
-  if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
-  const price = fbState.prices?.[ticker] ?? 0;
-  if (price <= 0) return showToast('현재가 오류', 'error');
-  const total = qty * price;
-  const stu = fbState.students?.[currentUser] ?? {};
-  const existPos = fbState.shortPositions?.[currentUser]?.[ticker] ?? { qty:0, avgShortPrice:0 };
-  const newQty = existPos.qty + qty;
-  const newAvg = existPos.qty > 0
-    ? ((existPos.qty * existPos.avgShortPrice) + (qty * price)) / newQty
-    : price;
-  const updates = {};
-  updates['state/students/' + currentUser + '/deposit'] = Math.round(((stu.deposit??0) + total) * 100) / 100;
-  updates['state/shortPositions/' + currentUser + '/' + ticker] = {
-    qty: newQty, avgShortPrice: Math.round(newAvg * 100) / 100
-  };
-  // 공매도 매도 = 하방압력 (앞에 삽입, 2배 가중)
-  if (!ticker.includes('_INV') && !ticker.includes('_LEV')) {
-    const curT = fbState.lastTrades?.[ticker] ?? [];
-    updates['state/lastTrades/' + ticker] = [
-      { qty: qty*2, price, side:'sell', isShort:true, ts:Date.now() }, ...curT
-    ];
-  }
-  const hist = [...(stu.history??[]), {
-    type:'short-sell', ticker, qty, price, total, date:new Date().toLocaleString('ko-KR')
-  }];
-  updates['state/students/' + currentUser + '/history'] = hist;
-  await update(ref(db), updates);
-  showToast('공매도 ' + qty + '주 @ ' + fmtF(price) + '점 ↓', 'success');
-  renderCurrentTab();
-};
-
-window.executeShortCover = async function(ticker) {
-  const pos = fbState.shortPositions?.[currentUser]?.[ticker];
-  if (!pos || pos.qty <= 0) return showToast('청산할 포지션이 없습니다', 'error');
-  const coverEl = document.getElementById('modal-trade-qty') || document.getElementById('trade-qty');
-  const qty = parseInt(coverEl?.value ?? '0') || 0;
-  if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
-  if (qty > pos.qty) return showToast('포지션 수량(' + pos.qty + '주)보다 많습니다', 'error');
-  const curPrice = fbState.prices?.[ticker] ?? 0;
-  const cost = qty * curPrice;
-  const pnl = Math.round((pos.avgShortPrice - curPrice) * qty * 100) / 100;
-  const stu = fbState.students?.[currentUser] ?? {};
-  const newDeposit = Math.round(((stu.deposit??0) - cost) * 100) / 100;
-  if (newDeposit < 0) return showToast('예금 부족 (필요: ' + fmtF(cost) + '점)', 'error');
-  const newQty = pos.qty - qty;
-  const updates = {};
-  updates['state/students/' + currentUser + '/deposit'] = newDeposit;
-  updates['state/shortPositions/' + currentUser + '/' + ticker] =
-    newQty > 0 ? { qty:newQty, avgShortPrice:pos.avgShortPrice } : null;
-  if (!ticker.includes('_INV') && !ticker.includes('_LEV')) {
-    const curT = fbState.lastTrades?.[ticker] ?? [];
-    updates['state/lastTrades/' + ticker] = [
-      { qty, price:curPrice, side:'buy', isShort:true, ts:Date.now() }, ...curT
-    ];
-  }
-  const hist = [...(stu.history??[]), {
-    type:'short-cover', ticker, qty, price:curPrice, total:cost, pnl,
-    date:new Date().toLocaleString('ko-KR')
-  }];
-  updates['state/students/' + currentUser + '/history'] = hist;
-  await update(ref(db), updates);
-  const sign = pnl >= 0 ? '+' : '';
-  showToast('공매도 청산 | 손익 ' + sign + fmtF(pnl) + '점', pnl >= 0 ? 'success' : 'error');
-  renderCurrentTab();
-};
-
 function renderTradePanelContent(ticker) {
   if (!currentUser || !fbState.marketOpen) {
     return '<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px;">' +
@@ -2502,12 +2419,11 @@ function renderTradePanelContent(ticker) {
   }
 
   const isShortMode = (activeOrderType === 'short');
-  const shortTabBtn = '<button class="order-type-tab'+(isShortMode?' active':'')+'" data-modal-action="order-short" data-ticker="'+ticker+'" style="'+(isShortMode?'background:var(--purple);color:#fff;':'color:var(--purple);')+'">공매도</button>';
   const orderTabHtml =
     '<div class="order-type-tabs">' +
     '<button class="order-type-tab'+(!isLimit&&!isShortMode?' active':'')+'" data-modal-action="order-market" data-ticker="'+ticker+'">시장가</button>' +
     '<button class="order-type-tab'+(isLimit?' active':'')+'" data-modal-action="order-limit" data-ticker="'+ticker+'">지정가</button>' +
-    shortTabBtn +
+    '<button class="order-type-tab'+(isShortMode?' active':'')+'" data-modal-action="order-short" data-ticker="'+ticker+'" style="'+(isShortMode?'background:var(--purple);color:#fff;':'color:var(--purple);')+'">공매도</button>' +
     '</div>';
 
   const limitPriceHtml = isLimit
@@ -2524,26 +2440,15 @@ function renderTradePanelContent(ticker) {
   const btnAction = isLimit ? 'modal-limit' : isShortMode ? 'modal-short' : 'modal-trade';
   const btnDisabled = !fbState.marketOpen ? 'disabled' : '';
   const shortPos = fbState.shortPositions?.[currentUser]?.[ticker];
-
   if (isShortMode) {
-    const shortPosHtml = renderShortPositions(ticker);
     return orderTabHtml +
       '<div class="trade-row"><label>현재가</label><span style="font-size:14px;font-weight:700;">'+fmtF(price)+'점</span></div>' +
-      (shortPos?.qty > 0 ? '<div style="margin-bottom:8px;font-size:12px;padding:8px;background:rgba(170,112,255,0.1);border-radius:8px;color:var(--text2);">포지션: <b style="color:var(--purple);">'+shortPos.qty+'주</b> @ '+fmtF(shortPos.avgShortPrice)+'점</div>' : '') +
-      '<div class="trade-row"><label>수량</label>' +
-        '<input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" data-ticker="'+ticker+'" oninput="updateModalTradeTotal(this.dataset.ticker)" />' +
-        '<button data-modal-action="max" data-ticker="'+ticker+'" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button>' +
-      '</div>' +
-      '<div class="trade-summary">' +
-        '<div class="row"><span>예금</span><span>'+fmt(stu.deposit)+'점</span></div>' +
-        (shortPos?.qty > 0 ? '<div class="row"><span>평균 공매도가</span><span>'+fmtF(shortPos.avgShortPrice)+'점</span></div>' : '') +
-      '</div>' +
-      (shortPos?.qty > 0
-        ? '<button class="btn-cover" data-modal-action="modal-cover" data-ticker="'+ticker+'" '+btnDisabled+'>🔄 공매도 청산 (환매수)</button>'
-        : '<button class="btn-short" data-modal-action="modal-short" data-ticker="'+ticker+'" '+btnDisabled+'>🔻 공매도 실행</button>') +
-      shortPosHtml;
+      (shortPos?.qty>0?'<div style="margin-bottom:8px;font-size:12px;padding:8px;background:rgba(170,112,255,0.1);border-radius:8px;">포지션: <b style="color:var(--purple);">'+shortPos.qty+'주</b> @ '+fmtF(shortPos.avgShortPrice)+'점</div>':'') +
+      '<div class="trade-row"><label>수량</label><input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" data-ticker="'+ticker+'" oninput="updateModalTradeTotal(this.dataset.ticker)" /><button data-modal-action="max" data-ticker="'+ticker+'" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button></div>' +
+      '<div class="trade-summary"><div class="row"><span>예금</span><span>'+fmt(stu.deposit)+'점</span></div></div>' +
+      (shortPos?.qty>0?'<button class="btn-cover" data-modal-action="modal-cover" data-ticker="'+ticker+'" '+btnDisabled+'>🔄 공매도 청산</button>':'<button class="btn-short" data-modal-action="modal-short" data-ticker="'+ticker+'" '+btnDisabled+'>🔻 공매도 실행</button>') +
+      renderShortPositions(ticker);
   }
-
   return orderTabHtml +
     '<div class="trade-row"><label>현재가</label><span style="font-size:14px;font-weight:700;">'+fmtF(price)+'점</span></div>' +
     limitPriceHtml +
@@ -2572,16 +2477,310 @@ window.setModalMaxQty = function setModalMaxQty(ticker) {
   const stu   = fbState.students[currentUser];
   const price = fbState.prices?.[ticker] ?? 1;
   const avail = getAvailShares(ticker);
-  let max;
-  if (activeOrderType === 'short') {
-    max = Math.floor((stu.deposit??0) / price) || 999;
-  } else if (activeTradeType === 'buy') {
-    max = Math.min(Math.floor((stu.deposit??0) / price), avail);
-  } else {
-    max = stu.holdings?.[ticker] ?? 0;
-  }
+  const max = activeOrderType==='short' ? (Math.floor((stu.deposit??0)/price)||999) : activeTradeType==='buy' ? Math.min(Math.floor((stu.deposit??0)/price),avail) : (stu.holdings?.[ticker]??0);
   const el = document.getElementById('modal-trade-qty');
-  if (el) el.value = max;
+  if (el) { el.value = max; updateModalTradeTotal(ticker); }
+}
+
+window.executeModalTrade = async function executeModalTrade(ticker) {
+  if (!fbState.marketOpen) return showToast('폐장 중에는 거래할 수 없습니다', 'error');
+  const qty   = parseInt(document.getElementById('modal-trade-qty')?.value) || 0;
+  if (qty <= 0) return showToast('수량을 입력해주세요', 'error');
+  const price = fbState.prices?.[ticker] ?? 0;
+  const total = qty * price;
+  const stu   = fbState.students[currentUser];
+  const isBuy = activeTradeType === 'buy';
+  if (isBuy) {
+    if (total > stu.deposit) return showToast('예금이 부족합니다', 'error');
+    const avail = getAvailShares(ticker);
+    if (!ticker.includes('_INV') && !ticker.includes('_LEV') && qty > avail)
+      return showToast(`매물 부족 (잔여: ${avail}주)`, 'error');
+  } else {
+    if ((stu.holdings?.[ticker] ?? 0) < qty) return showToast('보유 수량이 부족합니다', 'error');
+  }
+  const btn = document.querySelector('#chart-modal-root .btn-trade');
+  if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+  try {
+    const stuRef = ref(db, 'state/students/' + currentUser);
+    await runTransaction(stuRef, cur => {
+      if (!cur) return cur;
+      if (isBuy) {
+        cur.deposit = Math.round((cur.deposit - total) * 100) / 100;
+        cur.holdings = cur.holdings ?? {};
+        cur.holdings[ticker] = (cur.holdings[ticker] ?? 0) + qty;
+      } else {
+        if ((cur.holdings?.[ticker] ?? 0) < qty) return;
+        cur.deposit = Math.round((cur.deposit + total) * 100) / 100;
+        cur.holdings[ticker] -= qty;
+      }
+      if (!cur.history) cur.history = [];
+      cur.history.push({ type:isBuy?'buy':'sell', ticker, qty, price, total, date:new Date().toLocaleString('ko-KR') });
+      return cur;
+    });
+    // ── 수요/공급 압력 누적 ──────────────────────────
+    if (!ticker.includes('_INV') && !ticker.includes('_LEV')) {
+      const pressureDelta = isBuy ? qty : -qty;
+      const curPressure = fbState.tickPressure?.[ticker] ?? 0;
+      await update(ref(db, 'state/tickPressure'), {
+        [ticker]: curPressure + pressureDelta
+      });
+    }
+    showToast(`${isBuy?'구매':'판매'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
+    // 모달 내 거래 영역만 갱신
+    const panel = document.getElementById('modal-chart-panel');
+    if (panel) panel.innerHTML = renderChartModalInner(ticker);
+    setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', ticker, chartPeriod), 30);
+  } catch(e) {
+    showToast('거래 중 오류가 발생했습니다', 'error');
+  }
+}
+
+// PC 차트 자동 갱신 (Firebase 업데이트 시 호출)
+function refreshPcChart() {
+  if (selectedStock && window.innerWidth >= 900) {
+    // 수량 입력 중이면 차트 캔버스만 다시 그리고 HTML은 재렌더 안 함
+    const qtyFocused = document.activeElement?.id === 'trade-qty';
+    const panel = document.getElementById('pc-chart-panel');
+    if (panel) {
+      if (!qtyFocused) {
+        panel.innerHTML = renderChartPanel(selectedStock);
+      }
+      setTimeout(() => drawCandleChart('pc-candle-canvas','pc-vol-canvas', selectedStock, chartPeriod), 30);
+    }
+  }
+  // 모바일 모달: 수량 입력 중이면 차트만 다시 그림
+  if (chartModalTicker) {
+    const qtyFocused = document.activeElement?.id === 'modal-trade-qty';
+    const panel = document.getElementById('modal-chart-panel');
+    if (panel && !qtyFocused) {
+      // 현재 입력값 저장
+      const savedQty = document.getElementById('modal-trade-qty')?.value;
+      panel.innerHTML = renderChartModalInner(chartModalTicker);
+      setTimeout(() => {
+        drawCandleChart('modal-candle-canvas','modal-vol-canvas', chartModalTicker, chartPeriod);
+        // 입력값 복원
+        const qtyEl = document.getElementById('modal-trade-qty');
+        if (qtyEl && savedQty) qtyEl.value = savedQty;
+      }, 30);
+    } else if (panel && qtyFocused) {
+      // 입력 중엔 캔버스만 다시 그림
+      setTimeout(() => drawCandleChart('modal-candle-canvas','modal-vol-canvas', chartModalTicker, chartPeriod), 30);
+    }
+  }
+}
+
+// ── 간단 공지 마퀴 ────────────────────────────────────
+function updateNoticeBar() {
+  const bar = document.getElementById('notice-bar');
+  if (!bar) return;
+  const noticesObj = fbState?.notices || {};
+  const notices = typeof noticesObj === 'object' && !Array.isArray(noticesObj)
+    ? Object.values(noticesObj).filter(Boolean)
+    : [];
+  if (!notices.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  const sorted = [...notices].sort((a,b) => (a.ts||0)-(b.ts||0));
+  const items = sorted.map(n => `<span class="marquee-item">📢 ${n.text}</span>`).join('');
+  // 이미 같은 내용이면 재렌더 안 함 (애니메이션 끊김 방지)
+  const newContent = items + items;
+  const existing = bar.querySelector('.marquee-inner');
+  if (existing && existing.innerHTML === newContent) return;
+  bar.innerHTML = '<div class="marquee-wrap"><div class="marquee-inner">' + newContent + '</div></div>';
+}
+
+// ── PC 뉴스 사이드 패널 ──────────────────────────────
+function renderNewsSidePanel() {
+  const panel = document.getElementById('news-side-panel');
+  if (!panel) return;
+  // 모바일에서는 뉴스 사이드 패널 사용 안 함
+  if (window.innerWidth < 900) { panel.innerHTML = ''; return; }
+  const newsObj = fbState?.news || {};
+  const news = typeof newsObj === 'object' && !Array.isArray(newsObj)
+    ? Object.values(newsObj).filter(Boolean) : [];
+  const sorted = [...news].sort((a,b) => (b.ts||0)-(a.ts||0));
+  if (!sorted.length) {
+    panel.innerHTML = `<div class="news-side-title">📰 뉴스</div><div style="font-size:12px;color:var(--text3);text-align:center;padding:24px 0;">등록된 뉴스가 없습니다.</div>`;
+    return;
+  }
+  panel.innerHTML = `<div class="news-side-title">📰 뉴스</div>` + sorted.map(n => `
+    <div class="news-side-card">
+      ${n.image ? `<img src="${n.image}" alt="뉴스 이미지" />` : ''}
+      <span class="news-side-cat">${n.category||'공지'}</span>
+      <div class="news-side-title-text">${n.title||''}</div>
+      <div class="news-side-body">${(n.body||'').replace(/\n/g,'<br>').substring(0,120)}${(n.body||'').length>120?'…':''}</div>
+      <div class="news-side-date">${n.date||''}</div>
+    </div>
+  `).join('');
+}
+
+// ── 메인 렌더 ───────────────────────────────────────────
+function renderMain() {
+  const el = document.getElementById('main-content');
+  if (!currentUser) {
+    // 로그인 화면: 전체 너비 중앙 정렬
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;">${renderLogin()}</div>`;
+    attachLoginBtn();
+    return;
+  }
+  el.innerHTML = `
+    <nav class="tabs" id="tabs-nav">
+      <button class="tab ${activeTab==='market'?'active':''}"    data-tab="market">🏪 시장</button>
+      <button class="tab ${activeTab==='portfolio'?'active':''}" data-tab="portfolio">💼 내 재산</button>
+      <button class="tab ${activeTab==='history'?'active':''}"   data-tab="history">📋 거래내역</button>
+      <button class="tab ${activeTab==='ranking'?'active':''}"   data-tab="ranking">🏆 순위</button>
+      <button class="tab ${activeTab==='assets'?'active':''}"    data-tab="assets">💰 자산확인</button>
+      <button class="tab ${activeTab==='news'?'active':''}"      data-tab="news">📰 뉴스</button>
+    </nav>
+    <div class="pc-layout">
+      <div class="pc-main"><div id="tab-content"></div></div>
+      <div class="news-side" id="news-side-panel"></div>
+    </div>`;
+  document.getElementById('tabs-nav').addEventListener('click', e => {
+    const tab = e.target.dataset.tab;
+    if (!tab) return;
+    activeTab = tab;
+    selectedStock = null;
+    document.querySelectorAll('#tabs-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    renderCurrentTab();
+  });
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  const el = document.getElementById('tab-content');
+  if (!el || !fbState) return;
+  if (activeTab === 'market')     el.innerHTML = renderMarket();
+  if (activeTab === 'portfolio')  el.innerHTML = renderPortfolio();
+  if (activeTab === 'history')    el.innerHTML = renderHistory();
+  if (activeTab === 'ranking')    el.innerHTML = renderRanking();
+  if (activeTab === 'assets')     el.innerHTML = renderAssets();
+  if (activeTab === 'news')       el.innerHTML = renderNews();
+  renderNewsSidePanel();
+  attachTabListeners();
+  // PC 차트 렌더
+  if (activeTab === 'market' && selectedStock && window.innerWidth >= 900) {
+    setTimeout(() => drawCandleChart('pc-candle-canvas','pc-vol-canvas', selectedStock, chartPeriod), 50);
+  }
+}
+
+function attachLoginBtn() {
+  const sel = document.getElementById('login-select');
+  const btn = document.getElementById('login-btn');
+
+  btn?.addEventListener('click', async () => {
+    const name = sel?.value;
+    if (!name) { showToast('이름을 선택해주세요', 'error'); return; }
+    const pw = document.getElementById('student-pw-input')?.value || '';
+
+    // ── 선생님 계정 ──────────────────────────────────
+    if (name === TEACHER_ACCOUNT.name) {
+      if (!pw) { showToast('비밀번호를 입력해주세요', 'error'); return; }
+      if (pw !== TEACHER_ACCOUNT.password) { showToast('비밀번호가 틀렸습니다', 'error'); return; }
+      currentUser = name;
+      if (!fbState.students?.[name]) {
+        await update(ref(db, 'state/students/' + name), { deposit:1000, holdings:{}, history:[], group:0 });
+      }
+      document.getElementById('user-label').textContent = name + ' (관리자)';
+      const lb = document.getElementById('logout-btn');
+      if (lb) lb.style.display = 'inline-block';
+      startPriceTick();
+      renderMain();
+      return;
+    }
+
+    // ── 학생 계정 비밀번호 확인 ─────────────────────
+    if (!pw) { showToast('비밀번호를 입력해주세요', 'error'); return; }
+    const savedPw = fbState.students?.[name]?.password ?? '1234'; // 초기 비번 1234
+    if (pw !== savedPw) { showToast('비밀번호가 틀렸습니다 ❌', 'error'); return; }
+
+    currentUser = name;
+    const gName = GROUPS.find(g => g.id === fbState?.students?.[name]?.group)?.name ?? '';
+    document.getElementById('user-label').textContent = name + ' (' + gName + ')';
+    const lb = document.getElementById('logout-btn');
+    if (lb) lb.style.display = 'inline-block';
+    startPriceTick();
+    renderMain();
+  });
+}
+
+// ── 시장 탭 ────────────────────────────────────────────
+function renderMarket() {
+  const stocks = getStocks();
+  const closed = !fbState.marketOpen;
+  const banner = closed ? `<div class="closed-banner">🔒 현재 폐장 중입니다. 거래가 불가능합니다.</div>` : '';
+
+  function row(s) {
+    const price = fbState.prices?.[s.ticker] ?? 0;
+    const pct   = pctChange(s.ticker);
+    const up = pct > 0, dn = pct < 0;
+    const avail = getAvailShares(s.ticker);
+    const badge = s.type === 'base'
+      ? `<span class="badge badge-base">주식</span>`
+      : s.type === 'inv'
+        ? `<span class="badge badge-inv">인버스</span>`
+        : `<span class="badge badge-lev">레버리지</span>`;
+    const isSel = selectedStock === s.ticker;
+    return `
+      <div class="stock-row${isSel?' selected':''}" data-ticker="${s.ticker}">
+        <div class="s-info">
+          <div class="s-ticker">${s.name} ${badge}</div>
+          <div class="s-name">${s.desc||''}</div>
+        </div>
+        <div class="s-price-col">
+          <div class="s-price" style="color:${pct>0?'var(--red)':pct<0?'var(--blue)':'var(--text)'}">${fmtF(price)}점</div>
+          <div class="s-change ${up?'up':dn?'down':'flat'}">${up?'▲':dn?'▼':'—'} ${Math.abs(pct).toFixed(2)}% <span style="font-size:10px;opacity:0.65;">어제보다</span></div>
+        </div>
+        ${s.type==='base' ? `<div class="s-vol">${avail}주<br><span style="font-size:10px">잔여</span></div>` : '<div style="width:36px"></div>'}
+      </div>`;
+  }
+
+  const tradeHTML = selectedStock ? renderTradePanel() : '';
+  const rightPanel = selectedStock ? `
+    <div class="market-right">
+      <div class="chart-side" id="pc-chart-panel">
+        ${renderChartPanel(selectedStock)}
+      </div>
+      ${tradeHTML}
+    </div>` : `<div class="market-right">${tradeHTML}</div>`;
+
+  const stockList = `
+    ${banner}
+    <div class="section-title">📦 모둠 주식</div>
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='base').map(row).join('')}</div>
+    <div class="section-title">📉 인버스 상품</div>
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='inv').map(row).join('')}</div>
+    <div class="section-title">📈 레버리지 상품</div>
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='lev').map(row).join('')}</div>
+    <div class="section-title" style="color:var(--red);">⚠️ 100배 인버스 (초고위험)</div>
+    <div class="stocks-2col">${stocks.filter(s=>s.type==='inv100').map(row).join('')}</div>`;
+
+  return `<div class="market-grid"><div class="market-left">${stockList}</div>${rightPanel}</div>`;
+}
+
+
+// ── 지정가 주문 ──────────────────────────────────────
+function renderPendingOrders(ticker) {
+  const orders = fbState.limitOrders?.[currentUser] ?? {};
+  const myOrders = Object.values(orders).filter(o => o && o.ticker === ticker);
+  if (!myOrders.length) return '';
+  let html = '<div class="pending-orders">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;">⏳ 대기 중인 지정가 주문</div>';
+  myOrders.forEach(function(o) {
+    const side = o.side === 'buy' ? '매수' : '매도';
+    const color = o.side === 'buy' ? 'var(--red)' : 'var(--blue)';
+    html += '<div class="pending-order-item">';
+    html += '<span style="color:' + color + ';font-weight:700;">' + side + '</span>';
+    html += '<span>' + o.qty + '주 @ ' + fmtF(o.limitPrice) + '점</span>';
+    html += '<button class="pending-order-cancel" onclick="cancelLimitOrder(' + JSON.stringify(o.id) + ')">취소</button>';
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+window.cancelLimitOrder = async function(orderId) {
+  await update(ref(db, 'state/limitOrders/' + currentUser), { [orderId]: null });
+  renderCurrentTab();
 };
 
 window.placeLimitOrder = async function placeLimitOrder() {
@@ -2800,21 +2999,12 @@ async function executeTrade() {
         current.holdings[selectedStock] = held - qty;
       }
       if (!current.history) current.history = [];
-      let profit = 0;
-      if (!isBuy) {
-        const avgBuy = calcAvgBuyPrice(current.history, selectedStock);
-        profit = Math.round((price - avgBuy) * qty * 100) / 100;
-      }
       current.history.push({
         type: isBuy ? 'buy' : 'sell',
-        ticker: selectedStock, qty, price, total, profit,
+        ticker: selectedStock,
+        qty, price, total,
         date: new Date().toLocaleString('ko-KR')
       });
-      // lastTrades 기록 (비동기 무관하게 fire-and-forget)
-      if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV')) {
-        const curT = fbState.lastTrades?.[selectedStock] ?? [];
-        update(ref(db, 'state/lastTrades'), { [selectedStock]: [...curT, {qty, price, side:activeTradeType, ts:Date.now()}] });
-      }
       return current;
     });
 
@@ -2984,7 +3174,7 @@ function renderPortfolio() {
     <div class="empty"><div class="empty-icon">📦</div>보유 종목이 없습니다.<br>시장 탭에서 주식을 구매해보세요!</div>`;
 
   const stockVal = held.reduce((sum, s) => sum + (stu.holdings[s.ticker] ?? 0) * (fbState.prices?.[s.ticker] ?? 0), 0);
-  return discussAdmin + shortSection + `
+  return discussAdmin + `
     ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
     <div class="metrics">
       <div class="metric"><div class="metric-label">주식 평가액</div><div class="metric-value blue">${fmt(stockVal)}점</div></div>
