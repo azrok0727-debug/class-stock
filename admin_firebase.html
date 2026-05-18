@@ -143,7 +143,6 @@ const GROUPS = [
   { id:6, name:'6모둠', members:['이주호','민나진','최상윤','황세현','이수빈'] },
 ];
 const ALL_STUDENTS = GROUPS.flatMap(g => g.members.map(m => ({ name:m, group:g.id })));
-const GN = Object.fromEntries(GROUPS.map(g => [g.id, g.name]));
 const GROUP_COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#ff7b72','#d2a679'];
 const ADMIN_PW = 'teacher2024';
 
@@ -274,7 +273,6 @@ function renderAdminMain() {
       <button class="tab ${activeTab==='notice'?'active':''}"    data-tab="notice">📢 간단 공지</button>
       <button class="tab ${activeTab==='salary'?'active':''}"    data-tab="salary">💰 주급 관리</button>
       <button class="tab ${activeTab==='split'?'active':''}"     data-tab="split">✂️ 액면분할</button>
-      <button class="tab ${activeTab==='coupon'?'active':''}" data-tab="coupon">🎟 쿠폰 지원금</button>
       <button class="tab ${activeTab==='tax'?'active':''}"       data-tab="tax">💸 세금징수</button>
       <button class="tab" data-tab="reset" style="color:var(--red)">⚠️ 초기화</button>
     </div>
@@ -302,7 +300,6 @@ function renderTab() {
   if (activeTab === 'notice')       el.innerHTML = renderNoticeAdmin();
   if (activeTab === 'salary')       el.innerHTML = renderSalary();
   if (activeTab === 'split')        el.innerHTML = renderSplit();
-  if (activeTab === 'coupon')       el.innerHTML = renderCoupon();
   if (activeTab === 'tax')          el.innerHTML = renderTax();
   if (activeTab === 'reset')        el.innerHTML = renderReset();
   attachTabListeners();
@@ -514,7 +511,7 @@ async function autoUpdateGroupScores() {
   });
 
   if (changed) {
-    await update(ref(db), updates);
+    update(ref(db), updates); // fire-and-forget
   }
 }
 
@@ -709,6 +706,8 @@ function renderTransactions() {
             if (isTax) { typeLabel = '세금'; typeStyle = 'background:var(--red-bg);color:var(--red)'; }
             const isTaxIncome = h.type === 'tax-income';
             if (isTaxIncome) { typeLabel = '세수입금'; typeStyle = 'background:var(--purple-bg);color:var(--purple)'; }
+            const isSalaryOut = h.type === 'salary-out';
+            if (isSalaryOut) { typeLabel = '주급지출'; typeStyle = 'background:var(--red-bg);color:var(--red)'; }
             const isForcedSell = h.type === 'sell' && h.forcedByTax;
             if (isForcedSell) { typeLabel = '강제매도'; typeStyle = 'background:rgba(255,165,0,0.15);color:#ffa500'; }
             const isTaxRow = h.type === 'tax';
@@ -914,11 +913,32 @@ window.payAllSalaries = async function() {
   const roles = config.roles ?? {};
   const studentRoles = config.studentRoles ?? {};
 
-  if (!confirm('모든 학생에게 주급을 지급할까요?')) return;
+  // 선생님 예금 확인
+  const teacher = fbState.students?.['김민재 선생님'] ?? {};
+  const teacherDeposit = teacher.deposit ?? 0;
+
+  // 총 지급액 미리 계산
+  let totalPaid = 0;
+  ALL_STUDENTS.forEach(s => {
+    const stu = fbState.students?.[s.name];
+    if (!stu) return;
+    const role = studentRoles[s.name];
+    const bonus = role && roles[role] !== undefined ? roles[role] : 0;
+    totalPaid += baseSalary + bonus;
+  });
+
+  if (teacherDeposit < totalPaid) {
+    return showToast(
+      '선생님 예금이 부족합니다!\n필요: ' + fmt(totalPaid) + '점 / 보유: ' + fmt(Math.round(teacherDeposit)) + '점',
+      'error'
+    );
+  }
+
+  if (!confirm('모든 학생에게 주급을 지급할까요?\n총 ' + fmt(totalPaid) + '점이 김민재 선생님 계좌에서 차감됩니다.')) return;
 
   const updates = {};
-  let totalPaid = 0;
   let count = 0;
+  let actualPaid = 0;
 
   ALL_STUDENTS.forEach(s => {
     const stu = fbState.students?.[s.name];
@@ -927,36 +947,28 @@ window.payAllSalaries = async function() {
     const bonus = role && roles[role] !== undefined ? roles[role] : 0;
     const pay = baseSalary + bonus;
     if (pay <= 0) return;
-    const newDeposit = (stu.deposit ?? 0) + pay;
-    updates['state/students/' + s.name + '/deposit'] = newDeposit;
-    // 거래내역에 주급 기록 추가
+    updates['state/students/' + s.name + '/deposit'] = (stu.deposit ?? 0) + pay;
     const hist = [...(stu.history ?? []), {
-      type: 'salary',
-      ticker: '',
-      qty: 0,
-      price: 0,
-      total: pay,
-      date: new Date().toLocaleString('ko-KR'),
-      role: role || '기본',
+      type: 'salary', ticker: '', qty: 0, price: 0, total: pay,
+      date: new Date().toLocaleString('ko-KR'), role: role || '기본',
     }];
     updates['state/students/' + s.name + '/history'] = hist;
-    // 가나디뱅크 거래내역
-    const bankHist = [...(fbState.bankHistory?.[s.name] ?? []), {
-      type: 'salary',
-      amount: pay,
-      role: role || '기본',
-      ts: Date.now(),
-    }];
-    updates['state/bankHistory/' + s.name] = bankHist;
-    totalPaid += pay;
+    actualPaid += pay;
     count++;
   });
 
-  // 마지막 지급일 기록
+  // 선생님 계좌에서 차감
+  updates['state/students/김민재 선생님/deposit'] =
+    Math.round((teacherDeposit - actualPaid) * 100) / 100;
+  const tHist = [...(teacher.history ?? []), {
+    type: 'salary-out', ticker: '', qty: 0, price: 0, total: actualPaid,
+    date: new Date().toLocaleString('ko-KR'), paidTo: count,
+  }];
+  updates['state/students/김민재 선생님/history'] = tHist;
   updates['state/salaryConfig/lastPayDate'] = new Date().toLocaleString('ko-KR');
 
   await update(ref(db), updates);
-  showToast(count + '명에게 총 ' + totalPaid + '점 주급 지급됨! 💰', 'success');
+  showToast(count + '명에게 총 ' + fmt(actualPaid) + '점 주급 지급! 💰 (선생님 계좌에서 차감)', 'success');
 };
 
 
@@ -1183,8 +1195,8 @@ window.collectCustomTax = async function(name) {
 };
 
 function renderTax() {
-  // 모든 학생(선생님 제외) 세금 미리보기
-  const studentNames = ALL_STUDENTS.map(s => s.name);
+  // 학생만 (선생님 제외)
+  const studentNames = ALL_STUDENTS.map(s => s.name); // 선생님은 세금 징수 대상 제외
   const results = studentNames.map(name => {
     const stu = fbState.students?.[name];
     if (!stu) return null;
@@ -1373,14 +1385,6 @@ window.collectTaxes = async function() {
     });
     updates['state/students/' + name + '/history'] = newHist;
 
-    // 가나디뱅크 거래내역 - 학생 세금 납부
-    const bankHistTax = [...(fbState.bankHistory?.[name] ?? []), {
-      type: 'tax',
-      amount: actuallyCollected,
-      ts: Date.now(),
-    }];
-    updates['state/bankHistory/' + name] = bankHistTax;
-
     totalCollected += actuallyCollected;
     collectedFrom++;
     collectionLog.push({ name, tax: actuallyCollected, soldStocks: soldList });
@@ -1403,14 +1407,6 @@ window.collectTaxes = async function() {
       collectedFrom,
     });
     updates['state/students/김민재 선생님/history'] = teacherHist;
-    // 가나디뱅크 선생님 거래내역
-    const teacherBankHist = [...(fbState.bankHistory?.['김민재 선생님'] ?? []), {
-      type: 'tax-income',
-      amount: totalCollected,
-      from: collectedFrom,
-      ts: Date.now(),
-    }];
-    updates['state/bankHistory/김민재 선생님'] = teacherBankHist;
   }
 
   if (totalCollected === 0) {
@@ -1422,91 +1418,6 @@ window.collectTaxes = async function() {
   let msg = collectedFrom + '명에게서 총 ' + fmt(totalCollected) + '점 징수!';
   if (forcedSells > 0) msg += ' (강제매도 ' + forcedSells + '건)';
   showToast(msg + ' 💸', 'success');
-};
-
-// ── 쿠폰 구매 지원금 관리 ─────────────────────────────
-function renderCoupon() {
-  const rows = ALL_STUDENTS.map(s => {
-    const bal = fbState.students?.[s.name]?.couponBalance ?? 0;
-    const tot = calcTotal(s.name);
-    return `<tr>
-      <td style="font-weight:600;">${s.name}</td>
-      <td style="color:var(--text2);">${GN[s.group]||''}</td>
-      <td style="color:var(--green);font-weight:700;">${fmt(bal)}점</td>
-      <td style="color:var(--text2);font-size:12px;">${fmt(tot)}점${tot<10000?' 🎯':''}</td>
-      <td>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input type="number" id="cp-${s.name}" placeholder="지급액" min="1"
-            style="width:80px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;" />
-          <button onclick="grantCoupon('${s.name}')"
-            style="padding:5px 12px;background:rgba(34,212,160,0.15);border:1px solid rgba(34,212,160,0.3);border-radius:8px;color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">지급</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-
-  const totalBal = ALL_STUDENTS.reduce((s,st) => s + (fbState.students?.[st.name]?.couponBalance??0), 0);
-  const underCount = ALL_STUDENTS.filter(s => calcTotal(s.name) < 10000).length;
-
-  return `
-    <div class="card">
-      <h2>🎟 쿠폰 구매 지원금 관리</h2>
-      <div style="background:var(--bg3);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.8;">
-        💡 송금·주식 구매 불가 · <b style="color:var(--green);">가나디쿠폰샵</b>에서만 사용 가능<br>
-        전체 지원금 잔액 합계: <b style="color:var(--green);">${fmt(totalBal)}점</b> &nbsp;|&nbsp; 1만점 미만 학생: <b style="color:var(--accent);">${underCount}명</b>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
-        <input type="number" id="cp-all-amount" placeholder="1인당 지급액" min="1"
-          style="width:140px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;" />
-        <button onclick="grantCouponAll(false)"
-          style="padding:9px 16px;background:linear-gradient(135deg,#1a4a8a,#4f80ff);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-          👥 전체 (${ALL_STUDENTS.length}명)</button>
-        <button onclick="grantCouponAll(true)"
-          style="padding:9px 16px;background:linear-gradient(135deg,#1a6644,#22d4a0);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-          🎯 1만점 미만 (${underCount}명)</button>
-      </div>
-      <table class="data-table">
-        <thead><tr><th>이름</th><th>모둠</th><th>지원금 잔액</th><th>총 자산</th><th>지급</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-}
-
-window.grantCoupon = async function(name) {
-  const inp = document.getElementById('cp-' + name);
-  const amount = parseInt(inp?.value);
-  if (!amount || amount <= 0) return showToast('지급액을 입력해주세요', 'error');
-  const cur = fbState.students?.[name]?.couponBalance ?? 0;
-  const bankHist = [...(fbState.bankHistory?.[name] ?? []), {
-    type: 'coupon-grant', amount, ts: Date.now()
-  }];
-  await update(ref(db), {
-    ['state/students/' + name + '/couponBalance']: Math.round((cur + amount) * 100) / 100,
-    ['state/bankHistory/' + name]: bankHist,
-  });
-  showToast(name + '에게 쿠폰 지원금 ' + fmt(amount) + '점 지급!', 'success');
-  if (inp) inp.value = '';
-};
-
-window.grantCouponAll = async function(underOnly = false) {
-  const amount = parseInt(document.getElementById('cp-all-amount')?.value);
-  if (!amount || amount <= 0) return showToast('지급액을 입력해주세요', 'error');
-  const targets = underOnly
-    ? ALL_STUDENTS.filter(s => calcTotal(s.name) < 10000)
-    : ALL_STUDENTS;
-  if (targets.length === 0) return showToast('해당 학생이 없어요', 'info');
-  const label = underOnly ? '1만점 미만 ' + targets.length + '명' : '전체 ' + targets.length + '명';
-  if (!confirm(label + '에게 ' + fmt(amount) + '점씩 지급할까요?')) return;
-  const updates = {};
-  const ts = Date.now();
-  targets.forEach(s => {
-    const cur = fbState.students?.[s.name]?.couponBalance ?? 0;
-    updates['state/students/' + s.name + '/couponBalance'] = Math.round((cur + amount) * 100) / 100;
-    const hist = [...(fbState.bankHistory?.[s.name] ?? []), { type: 'coupon-grant', amount, ts }];
-    updates['state/bankHistory/' + s.name] = hist;
-  });
-  await update(ref(db), updates);
-  showToast(label + '에게 ' + fmt(amount) + '점 지급 완료!', 'success');
 };
 
 function renderReset() {
