@@ -1233,13 +1233,33 @@ function renderTax() {
   // ─── 커스텀 세금 목록 HTML ───
   let customHtml = '';
   customTaxes.forEach((ct, i) => {
+    // 미리보기: 이 세금으로 얼마나 걷히는지
+    let preview = 0;
+    let previewCount = 0;
+    studentNames.forEach(name => {
+      const stu = fbState.students?.[name];
+      if (!stu) return;
+      const dep = stu.deposit ?? 0;
+      const sv = calcStockVal(name);
+      const tot = dep + sv;
+      const iv = initVal(stu.group);
+      if (tot < (ct.threshold ?? 0)) return;
+      let base = 0;
+      if (ct.basis === 'profit') base = Math.max(0, tot - iv);
+      else if (ct.basis === 'deposit') base = dep;
+      else if (ct.basis === 'stockVal') base = sv;
+      else base = tot;
+      const amt = Math.round(base * ((ct.rate ?? 0) / 100));
+      if (amt > 0) { preview += amt; previewCount++; }
+    });
+
     customHtml += `
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
           <input type="text" value="${ct.name || ''}" placeholder="세금 명칭" data-custom-tax-name="${i}" style="flex:1;min-width:120px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;" />
           <button onclick="removeCustomTax(${i})" style="padding:6px 10px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer;">삭제</button>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
           <select data-custom-tax-basis="${i}" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;">
             <option value="totalAsset" ${ct.basis==='totalAsset'?'selected':''}>총 자산 기준</option>
             <option value="profit" ${ct.basis==='profit'?'selected':''}>수익금 기준</option>
@@ -1255,6 +1275,12 @@ function renderTax() {
             <input type="number" value="${ct.threshold ?? 0}" min="0" step="10000" data-custom-tax-threshold="${i}" style="width:100px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;text-align:right;" />
             <span style="color:var(--text2);font-size:12px;">점 이상</span>
           </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:8px;">
+          <span style="font-size:12px;color:var(--text3);">예상: <b style="color:var(--red);">${previewCount}명</b>에게서 <b style="color:var(--red);">${fmt(preview)}점</b></span>
+          <button onclick="collectCustomTaxByIndex(${i})" ${preview === 0 ? 'disabled' : ''} style="padding:6px 14px;background:${preview > 0 ? 'var(--purple)' : 'var(--bg3)'};color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:${preview > 0 ? 'pointer' : 'not-allowed'};font-family:inherit;">
+            💸 이 세금만 징수
+          </button>
         </div>
       </div>`;
   });
@@ -1302,6 +1328,9 @@ function renderTax() {
       </button>
       ${customTaxes.length > 0 ? `<button onclick="saveCustomTaxes()" style="width:100%;margin-top:10px;padding:12px;background:var(--purple);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(167,139,250,0.4);">
         💾 커스텀 세금 설정 저장
+      </button>
+      <button onclick="collectAllCustomTaxes()" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(135deg,var(--purple),var(--red));color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(167,139,250,0.3);">
+        💸 커스텀 세금 전체 징수 (${customTaxes.length}개)
       </button>` : ''}
     </div>
 
@@ -1542,6 +1571,134 @@ window.saveCustomTaxes = async function() {
   }
   await update(ref(db, 'state/taxConfig'), { customTaxes });
   showToast('커스텀 세금 설정 저장됨', 'success');
+};
+
+// ── 커스텀 세금 개별 징수 ──────────────────────────────────
+async function _collectOneTax(ct, label) {
+  const studentNames = ALL_STUDENTS.map(s => s.name);
+  const updates = {};
+  let totalCollected = 0;
+  let collectedFrom = 0;
+
+  for (const name of studentNames) {
+    const stu = fbState.students?.[name];
+    if (!stu) continue;
+    const dep = stu.deposit ?? 0;
+    const sv = calcStockVal(name);
+    const tot = dep + sv;
+    const iv = initVal(stu.group);
+    if (tot < (ct.threshold ?? 0)) continue;
+
+    let base = 0;
+    if (ct.basis === 'profit') base = Math.max(0, tot - iv);
+    else if (ct.basis === 'deposit') base = dep;
+    else if (ct.basis === 'stockVal') base = sv;
+    else base = tot;
+
+    const tax = Math.round(base * ((ct.rate ?? 0) / 100));
+    if (tax <= 0) continue;
+
+    let remainingTax = tax;
+    let newDeposit = dep;
+    const newHoldings = { ...(stu.holdings ?? {}) };
+
+    // 예금에서 차감
+    if (newDeposit >= remainingTax) {
+      newDeposit = Math.round((newDeposit - remainingTax) * 100) / 100;
+      remainingTax = 0;
+    } else {
+      remainingTax -= newDeposit;
+      newDeposit = 0;
+    }
+
+    // 부족하면 주식 강제매도
+    if (remainingTax > 0) {
+      const sorted = Object.entries(newHoldings)
+        .filter(([_, q]) => q > 0)
+        .map(([t, q]) => ({ ticker: t, qty: q, price: fbState.prices?.[t] ?? 0, value: q * (fbState.prices?.[t] ?? 0) }))
+        .sort((a, b) => b.value - a.value);
+      for (const stock of sorted) {
+        if (remainingTax <= 0) break;
+        if (stock.price <= 0) continue;
+        const sellQty = Math.min(Math.ceil(remainingTax / stock.price), stock.qty);
+        const sellAmt = sellQty * stock.price;
+        newHoldings[stock.ticker] = stock.qty - sellQty;
+        if (sellAmt >= remainingTax) {
+          newDeposit = Math.round((newDeposit + (sellAmt - remainingTax)) * 100) / 100;
+          remainingTax = 0;
+        } else {
+          remainingTax -= sellAmt;
+        }
+      }
+    }
+
+    const actual = tax - Math.max(0, remainingTax);
+    if (actual <= 0) continue;
+
+    updates['state/students/' + name + '/deposit'] = newDeposit;
+    updates['state/students/' + name + '/holdings'] = newHoldings;
+    const newHist = [...(stu.history ?? [])];
+    newHist.push({
+      type: 'tax', ticker: '', qty: 0, price: 0, total: actual,
+      date: new Date().toLocaleString('ko-KR'),
+      taxRate: ct.rate + '%', taxName: label, totalAsset: tot,
+    });
+    updates['state/students/' + name + '/history'] = newHist;
+    totalCollected += actual;
+    collectedFrom++;
+  }
+
+  // 선생님 계좌 입금
+  if (totalCollected > 0) {
+    const teacher = fbState.students?.['김민재 선생님'] ?? {};
+    const tDep = teacher.deposit ?? 0;
+    updates['state/students/김민재 선생님/deposit'] = Math.round((tDep + totalCollected) * 100) / 100;
+    const tHist = [...(teacher.history ?? [])];
+    tHist.push({
+      type: 'tax-income', ticker: '', qty: 0, price: 0, total: totalCollected,
+      date: new Date().toLocaleString('ko-KR'), collectedFrom, taxName: label,
+    });
+    updates['state/students/김민재 선생님/history'] = tHist;
+  }
+
+  return { updates, totalCollected, collectedFrom };
+}
+
+window.collectCustomTaxByIndex = async function(index) {
+  const customTaxes = fbState.taxConfig?.customTaxes ?? [];
+  const ct = customTaxes[index];
+  if (!ct) return showToast('세금 정보를 찾을 수 없습니다', 'error');
+  const label = ct.name || ('커스텀 세금 ' + (index + 1));
+  if (!confirm('"' + label + '" 세금을 징수하시겠습니까?\n(' + ct.rate + '%, ' +
+    (ct.basis === 'profit' ? '수익금' : ct.basis === 'deposit' ? '예금' : ct.basis === 'stockVal' ? '주식 평가액' : '총 자산') +
+    ' 기준)')) return;
+
+  const { updates, totalCollected, collectedFrom } = await _collectOneTax(ct, label);
+  if (totalCollected === 0) return showToast('징수할 세금이 없어요', 'info');
+  await update(ref(db), updates);
+  showToast('"' + label + '" ' + collectedFrom + '명에게서 ' + fmt(totalCollected) + '점 징수! 💸', 'success');
+};
+
+window.collectAllCustomTaxes = async function() {
+  const customTaxes = fbState.taxConfig?.customTaxes ?? [];
+  if (!customTaxes.length) return showToast('등록된 커스텀 세금이 없습니다', 'error');
+  const names = customTaxes.map(ct => ct.name || '미지정').join(', ');
+  if (!confirm('커스텀 세금 전체(' + customTaxes.length + '개)를 징수하시겠습니까?\n[' + names + ']')) return;
+
+  let grandTotal = 0;
+  let grandCount = 0;
+  for (let i = 0; i < customTaxes.length; i++) {
+    const ct = customTaxes[i];
+    const label = ct.name || ('커스텀 세금 ' + (i + 1));
+    const { updates, totalCollected, collectedFrom } = await _collectOneTax(ct, label);
+    if (totalCollected > 0) {
+      await update(ref(db), updates);
+      grandTotal += totalCollected;
+      grandCount += collectedFrom;
+    }
+  }
+  if (grandTotal === 0) return showToast('징수할 세금이 없어요', 'info');
+  showToast('커스텀 세금 전체 징수 완료! 총 ' + fmt(grandTotal) + '점 💸', 'success');
 };
 
 function renderReset() {
