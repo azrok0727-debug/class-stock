@@ -1148,6 +1148,13 @@ window.collectCustomTaxPct = async function(name) {
     date: new Date().toLocaleString('ko-KR'), custom: true, taxPct: pct,
   }];
   updates['state/students/' + name + '/history'] = hist;
+  // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+  const bankHist = [...(fbState?.bankHistory?.[name] ?? []), {
+    type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), custom: true, taxPct: pct,
+  }];
+  updates['state/bankHistory/' + name] = bankHist;
+  
   // 선생님 예금으로 이전
   const teacher = fbState.students?.['김민재 선생님'] ?? {};
   updates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + amount) * 100) / 100;
@@ -1156,6 +1163,12 @@ window.collectCustomTaxPct = async function(name) {
     date: new Date().toLocaleString('ko-KR'), from: name, taxPct: pct,
   }];
   updates['state/students/김민재 선생님/history'] = tHist;
+  // 선생님 bankHistory에도 추가
+  const teacherBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? []), {
+    type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), from: name, taxPct: pct,
+  }];
+  updates['state/bankHistory/김민재 선생님'] = teacherBankHist;
 
   await update(ref(db), updates);
   showToast(name + ' 총자산의 ' + pct + '% → ' + fmt(amount) + '점 징수 완료! 💸', 'success');
@@ -1179,6 +1192,12 @@ window.collectCustomTax = async function(name) {
     date: new Date().toLocaleString('ko-KR'), custom: true,
   }];
   updates['state/students/' + name + '/history'] = hist;
+  // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+  const bankHist = [...(fbState?.bankHistory?.[name] ?? []), {
+    type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), custom: true,
+  }];
+  updates['state/bankHistory/' + name] = bankHist;
 
   // 선생님 예금으로 이전
   const teacher = fbState.students?.['김민재 선생님'] ?? {};
@@ -1188,6 +1207,12 @@ window.collectCustomTax = async function(name) {
     date: new Date().toLocaleString('ko-KR'), from: name,
   }];
   updates['state/students/김민재 선생님/history'] = tHist;
+  // 선생님 bankHistory에도 추가
+  const teacherBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? []), {
+    type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), from: name,
+  }];
+  updates['state/bankHistory/김민재 선생님'] = teacherBankHist;
 
   await update(ref(db), updates);
   showToast(name + '에게서 ' + fmt(amount) + '점 세금 징수! → 김민재 선생님 예금으로 이전', 'success');
@@ -1644,6 +1669,16 @@ async function _collectOneTax(ct, label) {
       taxRate: ct.rate + '%', taxName: label, totalAsset: tot,
     });
     updates['state/students/' + name + '/history'] = newHist;
+    
+    // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+    const newBankHist = [...(fbState?.bankHistory?.[name] ?? [])];
+    newBankHist.push({
+      type: 'tax', ticker: '', qty: 0, price: 0, total: actual,
+      date: new Date().toLocaleString('ko-KR'),
+      taxRate: ct.rate + '%', taxName: label, totalAsset: tot,
+    });
+    updates['state/bankHistory/' + name] = newBankHist;
+    
     totalCollected += actual;
     collectedFrom++;
   }
@@ -1659,6 +1694,14 @@ async function _collectOneTax(ct, label) {
       date: new Date().toLocaleString('ko-KR'), collectedFrom, taxName: label,
     });
     updates['state/students/김민재 선생님/history'] = tHist;
+    
+    // 선생님 bankHistory에도 추가
+    const tBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? [])];
+    tBankHist.push({
+      type: 'tax-income', ticker: '', qty: 0, price: 0, total: totalCollected,
+      date: new Date().toLocaleString('ko-KR'), collectedFrom, taxName: label,
+    });
+    updates['state/bankHistory/김민재 선생님'] = tBankHist;
   }
 
   return { updates, totalCollected, collectedFrom };
