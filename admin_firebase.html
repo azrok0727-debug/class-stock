@@ -203,7 +203,7 @@ function subscribeState() {
       const isInput = document.activeElement?.tagName === 'INPUT' ||
                       document.activeElement?.tagName === 'TEXTAREA' ||
                       document.activeElement?.tagName === 'SELECT';
-      const skipRender = (activeTab === 'notice' || activeTab === 'news' || activeTab === 'salary') && isInput;
+      const skipRender = (activeTab === 'notice' || activeTab === 'news' || activeTab === 'salary' || activeTab === 'tax') && isInput;
       if (!skipRender) renderTab();
     }
   }, err => showToast('Firebase 연결 실패: ' + err.message, 'error'));
@@ -1195,8 +1195,14 @@ window.collectCustomTax = async function(name) {
 };
 
 function renderTax() {
-  // 학생만 (선생님 제외)
-  const studentNames = ALL_STUDENTS.map(s => s.name); // 선생님은 세금 징수 대상 제외
+  // ─── taxConfig from Firebase ───
+  const tc = fbState.taxConfig ?? {};
+  const tradeTax = tc.tradeTax ?? { enabled: false, basis: 'totalAsset', rate: 3, threshold: 1000000000 };
+  const holdingTax = tc.holdingTax ?? { enabled: false, basis: 'totalAsset', rate: 1 };
+  const customTaxes = tc.customTaxes ?? [];
+
+  // ─── 기존 누진세 (보유세) 미리보기 ───
+  const studentNames = ALL_STUDENTS.map(s => s.name);
   const results = studentNames.map(name => {
     const stu = fbState.students?.[name];
     if (!stu) return null;
@@ -1207,10 +1213,7 @@ function renderTax() {
     const tax = Math.round(total * bracket.rate);
     return { name, deposit, stockVal, total, bracket, tax, group: stu.group };
   }).filter(Boolean);
-
-  // 세금 많은 순 정렬
   results.sort((a, b) => b.tax - a.tax);
-
   const totalTax = results.reduce((s, r) => s + r.tax, 0);
   const taxablePeople = results.filter(r => r.tax > 0).length;
 
@@ -1227,9 +1230,81 @@ function renderTax() {
     '</tr>';
   });
 
+  // ─── 커스텀 세금 목록 HTML ───
+  let customHtml = '';
+  customTaxes.forEach((ct, i) => {
+    customHtml += `
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+          <input type="text" value="${ct.name || ''}" placeholder="세금 명칭" data-custom-tax-name="${i}" style="flex:1;min-width:120px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;" />
+          <button onclick="removeCustomTax(${i})" style="padding:6px 10px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer;">삭제</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select data-custom-tax-basis="${i}" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;">
+            <option value="totalAsset" ${ct.basis==='totalAsset'?'selected':''}>총 자산 기준</option>
+            <option value="profit" ${ct.basis==='profit'?'selected':''}>수익금 기준</option>
+            <option value="deposit" ${ct.basis==='deposit'?'selected':''}>예금 기준</option>
+            <option value="stockVal" ${ct.basis==='stockVal'?'selected':''}>주식 평가액 기준</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input type="number" value="${ct.rate ?? 5}" min="0" max="100" step="0.5" data-custom-tax-rate="${i}" style="width:70px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;text-align:right;" />
+            <span style="color:var(--text2);font-size:13px;">%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:12px;color:var(--text3);">최소자산:</span>
+            <input type="number" value="${ct.threshold ?? 0}" min="0" step="10000" data-custom-tax-threshold="${i}" style="width:100px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;text-align:right;" />
+            <span style="color:var(--text2);font-size:12px;">점 이상</span>
+          </div>
+        </div>
+      </div>`;
+  });
+
   return `
+    <!-- ═══ 1. 거래세 설정 ═══ -->
+    <div class="card" style="border:2px solid var(--orange);margin-bottom:14px;">
+      <h3 style="margin-bottom:12px;">🏷️ 거래세 (매수/매도 시 자동 징수)</h3>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">
+        주식 매수 또는 매도할 때마다 자동으로 세금이 차감됩니다. 총 자산이 기준 이상인 학생에게만 적용됩니다.
+      </p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="trade-tax-enabled" ${tradeTax.enabled?'checked':''} onchange="saveTradeTax()" style="width:18px;height:18px;accent-color:var(--orange);" />
+          <span style="font-size:14px;font-weight:700;">거래세 활성화</span>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <select id="trade-tax-basis" onchange="saveTradeTax()" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;">
+          <option value="totalAsset" ${tradeTax.basis==='totalAsset'?'selected':''}>총 자산 기준</option>
+          <option value="profit" ${tradeTax.basis==='profit'?'selected':''}>수익금 기준</option>
+        </select>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" id="trade-tax-rate" value="${tradeTax.rate}" min="0" max="100" step="0.5" onchange="saveTradeTax()" style="width:70px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;text-align:right;" />
+          <span style="color:var(--text2);font-size:13px;">%</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:13px;color:var(--text2);">총 자산</span>
+        <input type="number" id="trade-tax-threshold" value="${tradeTax.threshold}" min="0" step="100000000" onchange="saveTradeTax()" style="width:140px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;text-align:right;" />
+        <span style="font-size:13px;color:var(--text2);">점 이상인 학생에게 적용</span>
+      </div>
+    </div>
+
+    <!-- ═══ 2. 커스텀 세금 (보유세 등) ═══ -->
+    <div class="card" style="border:2px solid var(--purple);margin-bottom:14px;">
+      <h3 style="margin-bottom:12px;">🎨 커스텀 세금 관리 (보유세 등)</h3>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">
+        세금 명칭, 기준(총 자산/수익금/예금/주식 평가액), 비율, 최소 적용 자산을 자유롭게 설정하세요.<br>
+        아래 "세금 일괄 징수" 버튼을 누르면 여기 등록된 커스텀 세금 + 기존 누진세가 모두 적용됩니다.
+      </p>
+      <div id="custom-taxes-list">${customHtml}</div>
+      <button onclick="addCustomTax()" style="width:100%;padding:10px;background:var(--bg3);border:2px dashed var(--border);border-radius:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
+        + 커스텀 세금 추가
+      </button>
+    </div>
+
+    <!-- ═══ 3. 기존 누진세 정보 ═══ -->
     <div class="info-box" style="background:rgba(240,80,96,0.1);border:1px solid var(--red);">
-      💸 <b>세금 정책</b> (총자산 기준 누진세)<br>
+      💸 <b>누진세 정책</b> (총자산 기준)<br>
       • <b>1천만점 이상</b>: 총자산의 <b>30%</b><br>
       • <b>100만점 이상</b>: 총자산의 <b>14%</b><br>
       • <b>10만점 이상</b>: 총자산의 <b>7%</b><br>
@@ -1276,7 +1351,7 @@ function renderTax() {
     <div class="card" style="background:linear-gradient(135deg,rgba(240,80,96,0.15),rgba(245,87,108,0.1));border:2px solid var(--red);margin-top:14px;">
       <h3 style="margin-bottom:8px;">💸 세금 일괄 징수</h3>
       <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
-        버튼 클릭 시 <b>${taxablePeople}명</b>에게서 총 <b style="color:var(--red);">${fmt(totalTax)}점</b>의 세금이 징수됩니다.<br>
+        버튼 클릭 시 <b>${taxablePeople}명</b>에게서 총 <b style="color:var(--red);">${fmt(totalTax)}점</b>의 누진세가 징수됩니다.<br>
         <b>예금이 부족하면 보유 주식이 자동 매도</b>되어 세금을 충당합니다.<br>
         징수된 모든 세금은 <b style="color:var(--purple);">김민재 선생님</b> 계정으로 이전됩니다.
       </p>
@@ -1418,6 +1493,52 @@ window.collectTaxes = async function() {
   let msg = collectedFrom + '명에게서 총 ' + fmt(totalCollected) + '점 징수!';
   if (forcedSells > 0) msg += ' (강제매도 ' + forcedSells + '건)';
   showToast(msg + ' 💸', 'success');
+};
+
+// ── 거래세 설정 저장 ──────────────────────────────────────
+window.saveTradeTax = async function() {
+  const enabled = document.getElementById('trade-tax-enabled')?.checked ?? false;
+  const basis = document.getElementById('trade-tax-basis')?.value ?? 'totalAsset';
+  const rate = parseFloat(document.getElementById('trade-tax-rate')?.value) || 0;
+  const threshold = parseInt(document.getElementById('trade-tax-threshold')?.value) || 0;
+  await update(ref(db, 'state/taxConfig/tradeTax'), { enabled, basis, rate, threshold });
+  showToast('거래세 설정 저장됨', 'success');
+};
+
+// ── 커스텀 세금 추가/삭제/저장 ──────────────────────────────
+window.addCustomTax = async function() {
+  const customTaxes = [...(fbState.taxConfig?.customTaxes ?? [])];
+  customTaxes.push({ name: '보유세', basis: 'totalAsset', rate: 5, threshold: 0 });
+  await update(ref(db, 'state/taxConfig'), { customTaxes });
+  showToast('커스텀 세금 추가됨', 'success');
+  renderTab();
+};
+
+window.removeCustomTax = async function(index) {
+  if (!confirm('이 세금을 삭제할까요?')) return;
+  const customTaxes = [...(fbState.taxConfig?.customTaxes ?? [])];
+  customTaxes.splice(index, 1);
+  await update(ref(db, 'state/taxConfig'), { customTaxes });
+  showToast('삭제됨', 'success');
+  renderTab();
+};
+
+window.saveCustomTaxes = async function() {
+  const customTaxes = [];
+  let i = 0;
+  while (true) {
+    const nameEl = document.querySelector('[data-custom-tax-name="'+i+'"]');
+    if (!nameEl) break;
+    customTaxes.push({
+      name: nameEl.value || '세금 ' + (i+1),
+      basis: document.querySelector('[data-custom-tax-basis="'+i+'"]')?.value || 'totalAsset',
+      rate: parseFloat(document.querySelector('[data-custom-tax-rate="'+i+'"]')?.value) || 0,
+      threshold: parseInt(document.querySelector('[data-custom-tax-threshold="'+i+'"]')?.value) || 0,
+    });
+    i++;
+  }
+  await update(ref(db, 'state/taxConfig'), { customTaxes });
+  showToast('커스텀 세금 설정 저장됨', 'success');
 };
 
 function renderReset() {

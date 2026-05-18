@@ -778,6 +778,8 @@ canvas.chart-canvas{display:block;width:100%;}
 .hist-badge.buy{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,91,110,0.3);}
 .hist-badge.sell{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(94,184,255,0.3);}
 .hist-badge.short{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,0.3);}
+.hist-badge.tax,.hist-badge.trade-tax{background:rgba(240,80,96,0.12);color:var(--red);border:1px solid rgba(240,80,96,0.3);}
+.hist-badge.salary{background:rgba(63,185,80,0.12);color:var(--green);border:1px solid rgba(63,185,80,0.3);}
 .hist-main{flex:1;min-width:0;}
 .hist-name{font-weight:700;letter-spacing:-0.2px;}
 .hist-detail{font-size:11px;color:var(--text2);margin-top:2px;}
@@ -1436,7 +1438,7 @@ function renderShortPositions(ticker) {
 
 window.executeShortSell = async function(ticker) {
   const qEl=document.getElementById('modal-trade-qty')||document.getElementById('trade-qty');
-  const qty=parseInt(qEl?.value??'0')||0;
+  const qty=(parseInt((qEl?.value) ?? '0')) || 0;
   if(qty<=0) return showToast('수량을 입력해주세요','error');
   const price=fbState.prices?.[ticker]??0;
   if(price<=0) return showToast('현재가 오류','error');
@@ -1461,7 +1463,7 @@ window.executeShortCover = async function(ticker) {
   const pos=fbState.shortPositions?.[currentUser]?.[ticker];
   if(!pos?.qty) return showToast('청산할 포지션이 없습니다','error');
   const qEl=document.getElementById('modal-trade-qty')||document.getElementById('trade-qty');
-  const qty=parseInt(qEl?.value??'0')||0;
+  const qty=(parseInt((qEl?.value) ?? '0')) || 0;
   if(qty<=0) return showToast('수량을 입력해주세요','error');
   if(qty>pos.qty) return showToast('포지션 수량('+pos.qty+'주)보다 많습니다','error');
   const cp=fbState.prices?.[ticker]??0, pnl=Math.round((pos.avgShortPrice-cp)*qty*100)/100;
@@ -2537,7 +2539,7 @@ window.setModalMaxQty = function setModalMaxQty(ticker) {
   const stu   = fbState.students[currentUser];
   const price = fbState.prices?.[ticker] ?? 1;
   const avail = getAvailShares(ticker);
-  const max = activeOrderType==='short' ? (Math.floor((stu.deposit??0)/price)||999) : activeTradeType==='buy' ? Math.min(Math.floor((stu.deposit??0)/price),avail) : (stu.holdings?.[ticker]??0);
+  const max = activeOrderType==='short' ? ((Math.floor((stu.deposit??0)/price))||999) : activeTradeType==='buy' ? Math.min(Math.floor((stu.deposit??0)/price),avail) : (stu.holdings?.[ticker]??0);
   const el = document.getElementById('modal-trade-qty');
   if (el) { el.value = max; updateModalTradeTotal(ticker); }
 }
@@ -3048,8 +3050,27 @@ async function executeTrade() {
   const stu   = fbState.students[currentUser];
   const isBuy = activeTradeType === 'buy';
 
+  // ── 거래세 계산 ────────
+  const tradeTax = fbState.taxConfig?.tradeTax ?? { enabled: false };
+  let taxAmount = 0;
+  if (tradeTax.enabled && currentUser !== '김민재 선생님') {
+    const dep = stu.deposit ?? 0;
+    const sv = calcStockVal(currentUser);
+    const totalAsset = dep + sv;
+    const threshold = tradeTax.threshold ?? 1000000000;
+    if (totalAsset >= threshold) {
+      const basis = tradeTax.basis ?? 'totalAsset';
+      const rate = (tradeTax.rate ?? 3) / 100;
+      const iv = initVal(stu.group);
+      let taxBase = 0;
+      if (basis === 'profit') taxBase = Math.max(0, totalAsset - iv);
+      else taxBase = totalAsset;
+      taxAmount = Math.round(taxBase * rate);
+    }
+  }
+
   if (isBuy) {
-    if (total > stu.deposit) return showToast('예금이 부족합니다', 'error');
+    if (total + taxAmount > stu.deposit) return showToast(taxAmount > 0 ? '예금이 부족합니다 (거래금 ' + fmt(total) + ' + 세금 ' + fmt(taxAmount) + '점)' : '예금이 부족합니다', 'error');
     const avail = getAvailShares(selectedStock);
     if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV') && qty > avail) {
       return showToast(`매물 부족 (잔여: ${avail}주)`, 'error');
@@ -3057,6 +3078,8 @@ async function executeTrade() {
   } else {
     const held = stu.holdings?.[selectedStock] ?? 0;
     if (qty > held) return showToast('보유 수량이 부족합니다', 'error');
+    // 판매 후 예금에서 세금 차감 가능한지 확인
+    if (taxAmount > stu.deposit + total) return showToast('판매 후에도 세금(' + fmt(taxAmount) + '점)을 낼 예금이 부족합니다', 'error');
   }
 
   const btn = document.getElementById('btn-execute');
@@ -3064,16 +3087,17 @@ async function executeTrade() {
 
   try {
     const stuRef  = ref(db, `state/students/${currentUser}`);
+    const finalTax = taxAmount; // capture for closure
     await runTransaction(stuRef, current => {
       if (!current) return current;
       if (isBuy) {
-        current.deposit = Math.round((current.deposit - total) * 100) / 100;
+        current.deposit = Math.round((current.deposit - total - finalTax) * 100) / 100;
         current.holdings = current.holdings ?? {};
         current.holdings[selectedStock] = (current.holdings[selectedStock] ?? 0) + qty;
       } else {
         const held = current.holdings?.[selectedStock] ?? 0;
         if (held < qty) return; // abort
-        current.deposit = Math.round((current.deposit + total) * 100) / 100;
+        current.deposit = Math.round((current.deposit + total - finalTax) * 100) / 100;
         current.holdings[selectedStock] = held - qty;
       }
       if (!current.history) current.history = [];
@@ -3083,19 +3107,47 @@ async function executeTrade() {
         qty, price, total,
         date: new Date().toLocaleString('ko-KR')
       });
+      if (finalTax > 0) {
+        current.history.push({
+          type: 'trade-tax',
+          ticker: selectedStock,
+          qty: 0, price: 0,
+          total: finalTax,
+          date: new Date().toLocaleString('ko-KR'),
+          tradeType: isBuy ? 'buy' : 'sell',
+        });
+      }
       return current;
     });
+
+    // ── 세금 → 선생님 계좌로 이전 ────────
+    if (finalTax > 0) {
+      const teacherRef = ref(db, 'state/students/김민재 선생님');
+      await runTransaction(teacherRef, t => {
+        if (!t) return t;
+        t.deposit = Math.round(((t.deposit ?? 0) + finalTax) * 100) / 100;
+        if (!t.history) t.history = [];
+        t.history.push({
+          type: 'tax-income', ticker: '', qty: 0, price: 0,
+          total: finalTax,
+          date: new Date().toLocaleString('ko-KR'),
+          collectedFrom: 1,
+        });
+        return t;
+      });
+    }
 
     // ── 매수/매도 압력 누적 (단순 거래량 기반) ────────
     if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV')) {
       const pressureKey = isBuy ? 'buyPressure' : 'sellPressure';
       const curP = fbState[pressureKey]?.[selectedStock] ?? 0;
-      // qty만 누적 (가격 곱하지 않음 - 폭발 방지)
       await update(ref(db, 'state/' + pressureKey), {
         [selectedStock]: curP + qty
       });
     }
-    showToast(`${isBuy ? '구매' : '판매'} 완료! ${qty}주 × ${fmtF(price)}점`, 'success');
+    let toastMsg = `${isBuy ? '구매' : '판매'} 완료! ${qty}주 × ${fmtF(price)}점`;
+    if (finalTax > 0) toastMsg += ` (거래세 -${fmt(finalTax)}점)`;
+    showToast(toastMsg, 'success');
     selectedStock = null;
     renderCurrentTab();
   } catch(e) {
@@ -3350,17 +3402,21 @@ function renderHistory() {
     const isShortSell = h.type === 'short-sell';
     const isShortCover = h.type === 'short-cover';
     const isShort = isShortSell || isShortCover;
-    const label = isBuy ? '구매' : isShortSell ? '공매도' : isShortCover ? '청산' : '판매';
-    const badgeClass = isShort ? 'short' : h.type;
-    const amountClass = (isBuy || isShortCover) ? 'down' : 'up';
-    const amountSign = (isBuy || isShortCover) ? '-' : '+';
+    const isTradeTax = h.type === 'trade-tax';
+    const isTax = h.type === 'tax';
+    const isSalary = h.type === 'salary';
+    const label = isBuy ? '구매' : isShortSell ? '공매도' : isShortCover ? '청산' : isTradeTax ? '거래세' : isTax ? '세금' : isSalary ? '주급' : '판매';
+    const badgeClass = isShort ? 'short' : isTradeTax || isTax ? 'tax' : isSalary ? 'salary' : h.type;
+    const amountClass = (isBuy || isShortCover || isTradeTax || isTax) ? 'down' : 'up';
+    const amountSign = (isBuy || isShortCover || isTradeTax || isTax) ? '-' : '+';
     const pnlInfo = isShortCover && h.pnl !== undefined ? ` <span style="font-size:11px;color:${h.pnl>=0?'var(--green)':'var(--red)'};font-weight:700;">(${h.pnl>=0?'+':''}${fmtF(h.pnl)}점)</span>` : '';
+    const detailText = isTradeTax ? (h.tradeType === 'buy' ? '매수' : '매도') + ' 거래세' : isTax ? '세금 징수' : isSalary ? (h.role || '기본') : h.qty + '주 × ' + fmtF(h.price) + '점';
     return `
       <div class="history-item">
         <span class="hist-badge ${badgeClass}">${label}</span>
         <div class="hist-main">
-          <div class="hist-name">${stock?.name ?? h.ticker}</div>
-          <div class="hist-detail">${h.qty}주 × ${fmtF(h.price)}점${pnlInfo}</div>
+          <div class="hist-name">${stock?.name ?? (h.ticker || (isTradeTax ? '거래세' : isTax ? '누진세' : isSalary ? '주급' : ''))}</div>
+          <div class="hist-detail">${detailText}${pnlInfo}</div>
         </div>
         <div class="hist-amount">
           <div class="hist-total ${amountClass}">${amountSign}${fmt(h.total)}점</div>
