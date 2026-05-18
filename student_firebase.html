@@ -777,6 +777,7 @@ canvas.chart-canvas{display:block;width:100%;}
 }
 .hist-badge.buy{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,91,110,0.3);}
 .hist-badge.sell{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(94,184,255,0.3);}
+.hist-badge.short{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,0.3);}
 .hist-main{flex:1;min-width:0;}
 .hist-name{font-weight:700;letter-spacing:-0.2px;}
 .hist-detail{font-size:11px;color:var(--text2);margin-top:2px;}
@@ -2504,7 +2505,8 @@ function renderTradePanelContent(ticker) {
       (shortPos?.qty>0?'<div style="margin-bottom:8px;font-size:12px;padding:8px;background:rgba(170,112,255,0.1);border-radius:8px;">포지션: <b style="color:var(--purple);">'+shortPos.qty+'주</b> @ '+fmtF(shortPos.avgShortPrice)+'점</div>':'') +
       '<div class="trade-row"><label>수량</label><input type="number" id="modal-trade-qty" min="1" value="1" style="width:80px;" data-ticker="'+ticker+'" oninput="updateModalTradeTotal(this.dataset.ticker)" /><button data-modal-action="max" data-ticker="'+ticker+'" style="padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;">최대</button></div>' +
       '<div class="trade-summary"><div class="row"><span>예금</span><span>'+fmt(stu.deposit)+'점</span></div></div>' +
-      (shortPos?.qty>0?'<button class="btn-cover" data-modal-action="modal-cover" data-ticker="'+ticker+'" '+btnDisabled+'>🔄 공매도 청산</button>':'<button class="btn-short" data-modal-action="modal-short" data-ticker="'+ticker+'" '+btnDisabled+'>🔻 공매도 실행</button>') +
+      '<button class="btn-short" data-modal-action="modal-short" data-ticker="'+ticker+'" '+btnDisabled+'>🔻 공매도 실행</button>' +
+      (shortPos?.qty>0?'<button class="btn-cover" data-modal-action="modal-cover" data-ticker="'+ticker+'" '+btnDisabled+' style="margin-top:8px;">🔄 공매도 청산</button>':'') +
       renderShortPositions(ticker);
   }
   return orderTabHtml +
@@ -2942,11 +2944,15 @@ function renderTradePanel() {
       ${activeOrderType === 'short' ? `
         ${(() => {
           const sp = fbState.shortPositions?.[currentUser]?.[selectedStock];
-          return sp?.qty > 0
+          return (sp?.qty > 0
             ? '<div style=\"margin-bottom:8px;font-size:12px;padding:8px;background:rgba(170,112,255,0.1);border-radius:8px;\">' +
               '포지션: <b style=\"color:var(--purple);\">' + sp.qty + '주</b> @ ' + fmtF(sp.avgShortPrice) + '점' +
-              '</div><button class=\"btn-cover\" id=\"btn-execute\" ' + (!fbState.marketOpen?'disabled':'') + '>🔄 공매도 청산</button>'
-            : '<button class=\"btn-short\" id=\"btn-execute\" ' + (!fbState.marketOpen?'disabled':'') + '>🔻 공매도 실행</button>';
+              '</div>'
+            : '') +
+            '<button class=\"btn-short\" id=\"btn-execute\" ' + (!fbState.marketOpen?'disabled':'') + '>🔻 공매도 실행</button>' +
+            (sp?.qty > 0
+              ? '<button class=\"btn-cover\" id=\"btn-cover\" ' + (!fbState.marketOpen?'disabled':'') + ' style=\"margin-top:8px;\">🔄 공매도 청산</button>'
+              : '');
         })()}
         ${renderShortPositions(selectedStock)}
       ` : `
@@ -3007,12 +3013,12 @@ function attachTabListeners() {
   // execute button
   document.getElementById('btn-execute')?.addEventListener('click', () => {
     if (activeOrderType === 'limit') placeLimitOrder();
-    else if (activeOrderType === 'short') {
-      const shortPos = fbState.shortPositions?.[currentUser]?.[selectedStock];
-      if (shortPos?.qty > 0) window.executeShortCover(selectedStock);
-      else window.executeShortSell(selectedStock);
-    }
+    else if (activeOrderType === 'short') window.executeShortSell(selectedStock);
     else executeTrade();
+  });
+  // cover button (공매도 청산)
+  document.getElementById('btn-cover')?.addEventListener('click', () => {
+    window.executeShortCover(selectedStock);
   });
   // portfolio quick trade
   document.querySelectorAll('[data-quick-ticker]').forEach(btn => {
@@ -3299,15 +3305,23 @@ function renderHistory() {
   return `<div class="history-2col">` + hist.map(h => {
     const stock = stocks.find(s => s.ticker === h.ticker);
     const isBuy = h.type === 'buy';
+    const isShortSell = h.type === 'short-sell';
+    const isShortCover = h.type === 'short-cover';
+    const isShort = isShortSell || isShortCover;
+    const label = isBuy ? '구매' : isShortSell ? '공매도' : isShortCover ? '청산' : '판매';
+    const badgeClass = isShort ? 'short' : h.type;
+    const amountClass = (isBuy || isShortCover) ? 'down' : 'up';
+    const amountSign = (isBuy || isShortCover) ? '-' : '+';
+    const pnlInfo = isShortCover && h.pnl !== undefined ? ` <span style="font-size:11px;color:${h.pnl>=0?'var(--green)':'var(--red)'};font-weight:700;">(${h.pnl>=0?'+':''}${fmtF(h.pnl)}점)</span>` : '';
     return `
       <div class="history-item">
-        <span class="hist-badge ${h.type}">${isBuy?'구매':'판매'}</span>
+        <span class="hist-badge ${badgeClass}">${label}</span>
         <div class="hist-main">
           <div class="hist-name">${stock?.name ?? h.ticker}</div>
-          <div class="hist-detail">${h.qty}주 × ${fmtF(h.price)}점</div>
+          <div class="hist-detail">${h.qty}주 × ${fmtF(h.price)}점${pnlInfo}</div>
         </div>
         <div class="hist-amount">
-          <div class="hist-total ${isBuy?'down':'up'}">${isBuy?'-':'+'}${fmt(h.total)}점</div>
+          <div class="hist-total ${amountClass}">${amountSign}${fmt(h.total)}점</div>
           <div class="hist-date">${h.date}</div>
         </div>
       </div>`;
@@ -3395,7 +3409,25 @@ function renderAssets() {
           </div>
           <div style="color:var(--text2);margin-top:3px;">${s.name} · ${qty}주 × ${fmtF(p)}점</div>
         </div>`;
-      }).join('')}` : ''}`;
+      }).join('')}` : ''}
+    ${(() => {
+      const shortPos = fbState.shortPositions?.[currentUser] ?? {};
+      const shortEntries = Object.entries(shortPos).filter(([,p]) => p?.qty > 0);
+      if (!shortEntries.length) return '';
+      return '<div class="section-title">공매도 포지션</div>' + shortEntries.map(([tk, p]) => {
+        const stock = stocks.find(s => s.ticker === tk);
+        const cp = fbState.prices?.[tk] ?? 0;
+        const pnl = (p.avgShortPrice - cp) * p.qty;
+        const up = pnl >= 0;
+        return '<div class="holding-stock-item" style="border-left:3px solid var(--purple);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="font-weight:700;color:var(--purple);">' + tk + ' <span style="font-size:11px;padding:2px 6px;background:var(--purple-bg);border:1px solid var(--purple);border-radius:5px;font-size:10px;">SHORT</span></span>' +
+            '<span style="font-weight:700;color:' + (up?'var(--green)':'var(--red)') + ';">' + (up?'+':'') + fmtF(Math.round(pnl)) + '점</span>' +
+          '</div>' +
+          '<div style="color:var(--text2);margin-top:3px;">' + (stock?.name ?? tk) + ' · ' + p.qty + '주 × ' + fmtF(p.avgShortPrice) + '점 (현재 ' + fmtF(cp) + '점)</div>' +
+        '</div>';
+      }).join('');
+    })()}`;
 }
 
 // ── 토스트 ────────────────────────────────────────────
