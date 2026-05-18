@@ -3245,9 +3245,50 @@ function renderPortfolio() {
   const isTeacher = (currentUser === TEACHER_ACCOUNT.name);
   const discussAdmin = isTeacher ? renderDiscussAdmin() : '';
 
-  if (held.length === 0) return discussAdmin + `
+  // 공매도 포지션 HTML 생성
+  const shortPos = fbState.shortPositions?.[currentUser] ?? {};
+  const shortEntries = Object.entries(shortPos).filter(([,p]) => p?.qty > 0);
+  const shortHtml = shortEntries.length > 0 ? `
+    <div class="section-title">공매도 포지션</div>
+    <div class="holdings-grid">
+    ${shortEntries.map(([tk, p]) => {
+      const stock = stocks.find(s => s.ticker === tk);
+      const cp = fbState.prices?.[tk] ?? 0;
+      const pnl = (p.avgShortPrice - cp) * p.qty;
+      const pnlP = p.avgShortPrice > 0 ? ((p.avgShortPrice - cp) / p.avgShortPrice * 100) : 0;
+      const up = pnl >= 0;
+      return `
+        <div class="holding-card" style="border-left:3px solid var(--purple);">
+          <div class="holding-header">
+            <div>
+              <div class="holding-ticker" style="color:var(--purple);">${stock?.name ?? tk} <span style="font-size:10px;padding:2px 6px;background:var(--purple-bg);border:1px solid var(--purple);border-radius:5px;">SHORT</span></div>
+              <div class="holding-qty">${tk} · ${p.qty}주 공매도</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:16px;font-weight:700">${fmt(p.qty * p.avgShortPrice)}점</div>
+              <div style="font-size:12px;color:var(--${up?'green':'red'})">${up?'+':''}${fmt(pnl)}점 (${up?'+':''}${pnlP.toFixed(2)}%)</div>
+            </div>
+          </div>
+          <div class="holding-stats">
+            <div><div class="h-stat">공매도 진입가</div><div class="h-stat-val">${fmtF(p.avgShortPrice)}점</div></div>
+            <div><div class="h-stat">현재가</div><div class="h-stat-val">${fmtF(cp)}점</div></div>
+            <div><div class="h-stat">평가 손익</div><div class="h-stat-val" style="color:var(--${up?'green':'red'})">${up?'+':''}${fmt(pnl)}점</div></div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:8px;">강제청산가: ${fmtF(p.avgShortPrice * 2)}점</div>
+        </div>`;
+    }).join('')}
+    </div>` : '';
+
+  if (held.length === 0 && shortEntries.length === 0) return discussAdmin + `
     ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
     <div class="empty"><div class="empty-icon">📦</div>보유 종목이 없습니다.<br>시장 탭에서 주식을 구매해보세요!</div>`;
+
+  if (held.length === 0) return discussAdmin + `
+    ${closed ? '<div class="closed-banner">🔒 현재 폐장 중입니다.</div>' : ''}
+    ${shortHtml}
+    <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
+      <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
+    </div>`;
 
   const stockVal = held.reduce((sum, s) => sum + (stu.holdings[s.ticker] ?? 0) * (fbState.prices?.[s.ticker] ?? 0), 0);
   return discussAdmin + `
@@ -3292,6 +3333,7 @@ function renderPortfolio() {
         </div>`;
     }).join('')}
     </div>
+    ${shortHtml}
     <div style="text-align:center;margin-top:24px;margin-bottom:8px;">
       <button onclick="showProfitModal()" style="background:none;border:2px solid var(--border);border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;box-shadow:2px 2px 0 var(--border);">📊 지금까지 번 돈 확인하기</button>
     </div>`;
@@ -3362,13 +3404,21 @@ function renderAssetsStandalone() { return renderAssets(); }
 function renderAssets() {
   const stu  = fbState.students[currentUser];
   const sv   = calcStockVal(currentUser);
-  const total = (stu?.deposit ?? 0) + sv;
   const dep  = stu?.deposit ?? 0;
+
+  // 공매도 평가액 계산 (진입가 기준 담보금액)
+  const shortPos = fbState.shortPositions?.[currentUser] ?? {};
+  const shortEntries = Object.entries(shortPos).filter(([,p]) => p?.qty > 0);
+  let shortVal = 0;
+  shortEntries.forEach(([tk, p]) => { shortVal += p.qty * p.avgShortPrice; });
+
+  const total = dep + sv + shortVal;
   const iv   = initVal(stu?.group);
   const ret  = ((total - iv) / iv * 100);
   const up   = ret >= 0;
   const cashP  = total > 0 ? dep / total * 100 : 0;
   const stockP = total > 0 ? sv  / total * 100 : 0;
+  const shortP = total > 0 ? shortVal / total * 100 : 0;
 
   const stocks = getStocks();
   const held = stocks.filter(s => (stu?.holdings?.[s.ticker] ?? 0) > 0);
@@ -3382,19 +3432,21 @@ function renderAssets() {
       <h3>자산 구성</h3>
       <div class="asset-row"><span class="asset-label">예금 (현금)</span><span>${fmt(dep)}점</span></div>
       <div class="asset-row"><span class="asset-label">주식 평가액</span><span>${fmt(sv)}점</span></div>
+      ${shortVal > 0 ? `<div class="asset-row"><span class="asset-label">공매도 담보</span><span>${fmt(shortVal)}점</span></div>` : ''}
       <div class="asset-row"><span class="asset-label">총 자산</span><span>${fmt(total)}점</span></div>
     </div>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;">
       <h3 style="font-size:14px;font-weight:700;margin-bottom:10px;color:var(--text2);">자산 비율</h3>
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px;">
-        <span>예금 ${cashP.toFixed(1)}%</span><span>주식 ${stockP.toFixed(1)}%</span>
+        <span>예금 ${cashP.toFixed(1)}%</span>${shortVal > 0 ? `<span>공매도 ${shortP.toFixed(1)}%</span>` : ''}<span>주식 ${stockP.toFixed(1)}%</span>
       </div>
       <div style="height:10px;background:var(--bg4);border-radius:5px;overflow:hidden;display:flex;">
         <div style="width:${cashP.toFixed(1)}%;background:var(--blue);border-radius:5px 0 0 5px;"></div>
+        ${shortVal > 0 ? `<div style="width:${shortP.toFixed(1)}%;background:var(--purple);"></div>` : ''}
         <div style="width:${stockP.toFixed(1)}%;background:var(--green);border-radius:0 5px 5px 0;"></div>
       </div>
       <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;">
-        <span style="color:var(--blue);">■ 예금</span><span style="color:var(--green);">■ 주식</span>
+        <span style="color:var(--blue);">■ 예금</span>${shortVal > 0 ? '<span style="color:var(--purple);">■ 공매도</span>' : ''}<span style="color:var(--green);">■ 주식</span>
       </div>
     </div>
     ${held.length > 0 ? `
