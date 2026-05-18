@@ -1300,6 +1300,9 @@ function renderTax() {
       <button onclick="addCustomTax()" style="width:100%;padding:10px;background:var(--bg3);border:2px dashed var(--border);border-radius:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
         + 커스텀 세금 추가
       </button>
+      ${customTaxes.length > 0 ? `<button onclick="saveCustomTaxes()" style="width:100%;margin-top:10px;padding:12px;background:var(--purple);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(167,139,250,0.4);">
+        💾 커스텀 세금 설정 저장
+      </button>` : ''}
     </div>
 
     <!-- ═══ 3. 기존 누진세 정보 ═══ -->
