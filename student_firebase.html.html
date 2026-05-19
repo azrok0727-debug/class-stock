@@ -1413,6 +1413,7 @@ async function checkShortForceClose() {
       const cp = fbState.prices?.[tk] ?? 0;
       if (cp >= p.avgShortPrice * 2.0) {
         const stu = fbState.students?.[uid] ?? {};
+        // 강제청산: 손익만 예금에 반영
         const pnl = (p.avgShortPrice - cp) * p.qty;
         upd['state/students/'+uid+'/deposit'] = Math.round(((stu.deposit??0)+pnl)*100)/100;
         upd['state/shortPositions/'+uid+'/'+tk] = null;
@@ -1443,13 +1444,21 @@ window.executeShortSell = async function(ticker) {
   const price=fbState.prices?.[ticker]??0;
   if(price<=0) return showToast('현재가 오류','error');
   const stu=fbState.students?.[currentUser]??{};
+  const deposit = stu.deposit ?? 0;
+
+  // 증거금 체크: 기존 공매도 부채 + 신규 공매도 금액이 예금을 초과하면 불가
+  const currentLiability = calcShortLiability(currentUser);
+  const newLiability = qty * price;
+  if (currentLiability + newLiability > deposit) {
+    return showToast('증거금 부족! 공매도 부채(' + fmt(currentLiability + newLiability) + ')가 예금(' + fmt(deposit) + ')을 초과합니다', 'error');
+  }
+
   const ep=fbState.shortPositions?.[currentUser]?.[ticker]??{qty:0,avgShortPrice:0};
   const nq=ep.qty+qty, na=ep.qty>0?((ep.qty*ep.avgShortPrice)+(qty*price))/nq:price;
   const upd={};
-  upd['state/students/'+currentUser+'/deposit']=Math.round(((stu.deposit??0)+qty*price)*100)/100;
+  // 공매도 시 예금 변동 없음 (담보로 잡힘)
   upd['state/shortPositions/'+currentUser+'/'+ticker]={qty:nq,avgShortPrice:Math.round(na*100)/100};
   if(!ticker.includes('_INV')&&!ticker.includes('_LEV')){
-    // 공매도: 매도 압력 (qty만, 가격 곱하지 않음)
     const curSP = fbState.sellPressure?.[ticker] ?? 0;
     upd['state/sellPressure/'+ticker] = curSP + qty * 2;
   }
@@ -1466,10 +1475,12 @@ window.executeShortCover = async function(ticker) {
   const qty=(parseInt((qEl?.value) ?? '0')) || 0;
   if(qty<=0) return showToast('수량을 입력해주세요','error');
   if(qty>pos.qty) return showToast('포지션 수량('+pos.qty+'주)보다 많습니다','error');
-  const cp=fbState.prices?.[ticker]??0, pnl=Math.round((pos.avgShortPrice-cp)*qty*100)/100;
+  const cp=fbState.prices?.[ticker]??0;
+  const pnl=Math.round((pos.avgShortPrice-cp)*qty*100)/100;
   const stu=fbState.students?.[currentUser]??{};
-  const nd=Math.round(((stu.deposit??0)-qty*cp)*100)/100;
-  if(nd<0) return showToast('예금 부족 (필요: '+fmtF(qty*cp)+'점)','error');
+  // 청산 시 손익만 예금에 반영 (공매도 시 예금 변동 없었으므로)
+  const nd=Math.round(((stu.deposit??0)+pnl)*100)/100;
+  if(nd<0) return showToast('예금 부족 (손실: '+fmtF(Math.abs(pnl))+'점)','error');
   const upd={};
   upd['state/students/'+currentUser+'/deposit']=nd;
   upd['state/shortPositions/'+currentUser+'/'+ticker]=(pos.qty-qty)>0?{qty:pos.qty-qty,avgShortPrice:pos.avgShortPrice}:null;
@@ -1708,9 +1719,17 @@ function calcStockVal(sname) {
   Object.entries(stu.holdings ?? {}).forEach(([t, q]) => v += q * (fbState.prices?.[t] ?? 0));
   return v;
 }
+function calcShortLiability(sname) {
+  const pos = fbState?.shortPositions?.[sname] ?? {};
+  let v = 0;
+  Object.entries(pos).forEach(([t, p]) => {
+    if (p?.qty > 0) v += p.qty * (fbState.prices?.[t] ?? 0);
+  });
+  return v;
+}
 function calcTotal(sname) {
   const stu = fbState?.students?.[sname];
-  return (stu?.deposit ?? 0) + calcStockVal(sname);
+  return (stu?.deposit ?? 0) + calcStockVal(sname) - calcShortLiability(sname);
 }
 function initVal(gid) {
   if (!gid) return 1000; // 선생님 계정(group 0)
