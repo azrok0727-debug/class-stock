@@ -2539,7 +2539,7 @@ window.setModalMaxQty = function setModalMaxQty(ticker) {
   const stu   = fbState.students[currentUser];
   const price = fbState.prices?.[ticker] ?? 1;
   const avail = getAvailShares(ticker);
-  const max = activeOrderType==='short' ? ((Math.floor((stu.deposit??0)/price))||999) : activeTradeType==='buy' ? Math.min(Math.floor((stu.deposit??0)/price),avail) : (stu.holdings?.[ticker]??0);
+  const max = activeOrderType==='short' ? (Math.floor((stu.deposit??0)/price) || 999) : activeTradeType==='buy' ? Math.min(Math.floor((stu.deposit??0)/price),avail) : (stu.holdings?.[ticker]??0);
   const el = document.getElementById('modal-trade-qty');
   if (el) { el.value = max; updateModalTradeTotal(ticker); }
 }
@@ -2806,7 +2806,7 @@ function attachLoginBtn() {
     document.getElementById('user-label').textContent = name + ' (' + gName + ')';
     const lb = document.getElementById('logout-btn');
     if (lb) lb.style.display = 'inline-block';
-    startPriceTick();
+    // 학생은 가격 틱을 돌리지 않음 (선생님만 돌림)
     renderMain();
   });
 }
