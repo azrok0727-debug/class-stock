@@ -1236,7 +1236,7 @@ option,optgroup{background:#1a1f3a!important;color:var(--text)!important;}
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, get, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ── Firebase 설정 ──────────────────────────────────────
 const firebaseConfig = {
@@ -2043,11 +2043,16 @@ window.placeModalLimitOrder = async function(ticker) {
   if (lp <= 0)  return showToast('지정가를 입력해주세요', 'error');
   const stu   = fbState.students[currentUser];
   const isBuy = activeTradeType === 'buy';
-  if (isBuy && lp * qty > stu.deposit) return showToast('예금이 부족합니다', 'error');
+  const reserveAmt = lp * qty;
+  if (isBuy && reserveAmt > stu.deposit) return showToast('예금이 부족합니다', 'error');
   if (!isBuy && (stu.holdings?.[ticker] ?? 0) < qty) return showToast('보유 수량이 부족합니다', 'error');
   const id = 'lo_' + Date.now();
-  const order = { id, ticker, side: activeTradeType, qty, limitPrice: lp, ts: Date.now() };
-  await update(ref(db, 'state/limitOrders/' + currentUser), { [id]: order });
+  const order = { id, ticker, side: activeTradeType, qty, limitPrice: lp, ts: Date.now(), reserveAmt: isBuy ? reserveAmt : 0 };
+  const orderUpdates = { ['state/limitOrders/' + currentUser + '/' + id]: order };
+  if (isBuy) {
+    orderUpdates['state/students/' + currentUser + '/deposit'] = Math.round((stu.deposit - reserveAmt) * 100) / 100;
+  }
+  await update(ref(db), orderUpdates);
   showToast((isBuy?'매수':'매도') + ' 지정가 주문 등록! (' + fmtF(lp) + '점)', 'success');
   const panel = document.getElementById('modal-chart-panel');
   if (panel) {
@@ -2584,15 +2589,14 @@ window.executeModalTrade = async function executeModalTrade(ticker) {
   if (tradeTax.enabled && currentUser !== '김민재 선생님') {
     const dep = stu.deposit ?? 0;
     const sv = calcStockVal(currentUser);
-    const totalAsset = dep + sv;
+    const sl = calcShortLiability(currentUser);
+    const totalAsset = dep + sv - sl;
     const threshold = tradeTax.threshold ?? 1000000000;
     if (totalAsset >= threshold) {
       const basis = tradeTax.basis ?? 'totalAsset';
       const rate = (tradeTax.rate ?? 3) / 100;
       const iv = initVal(stu.group);
-      let taxBase = 0;
-      if (basis === 'profit') taxBase = Math.max(0, totalAsset - iv);
-      else taxBase = totalAsset;
+      const taxBase = basis === 'profit' ? Math.max(0, totalAsset - iv) : totalAsset;
       taxAmount = Math.round(taxBase * rate);
     }
   }
@@ -2609,44 +2613,40 @@ window.executeModalTrade = async function executeModalTrade(ticker) {
   const btn = document.querySelector('#chart-modal-root .btn-trade');
   if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
   try {
-    const stuRef = ref(db, 'state/students/' + currentUser);
     const finalTax = taxAmount;
-    await runTransaction(stuRef, cur => {
-      if (!cur) return cur;
-      if (isBuy) {
-        cur.deposit = Math.round((cur.deposit - total - finalTax) * 100) / 100;
-        cur.holdings = cur.holdings ?? {};
-        cur.holdings[ticker] = (cur.holdings[ticker] ?? 0) + qty;
-      } else {
-        if ((cur.holdings?.[ticker] ?? 0) < qty) return;
-        cur.deposit = Math.round((cur.deposit + total - finalTax) * 100) / 100;
-        cur.holdings[ticker] -= qty;
-      }
-      if (!cur.history) cur.history = [];
-      cur.history.push({ type:isBuy?'buy':'sell', ticker, qty, price, total, date:new Date().toLocaleString('ko-KR') });
-      if (finalTax > 0) {
-        cur.history.push({
-          type: 'trade-tax', ticker, qty: 0, price: 0, total: finalTax,
-          date: new Date().toLocaleString('ko-KR'), tradeType: isBuy ? 'buy' : 'sell',
-        });
-      }
-      return cur;
-    });
+    const stuPath = 'state/students/' + currentUser;
+    const tradeUpdates = {};
 
-    // ── 세금 → 선생님 계좌로 이전 ────────
+    // 예금 계산
+    const newDeposit = isBuy
+      ? Math.round((stu.deposit - total - finalTax) * 100) / 100
+      : Math.round((stu.deposit + total - finalTax) * 100) / 100;
+
+    // 보유량 계산
+    const curHeld = stu.holdings?.[ticker] ?? 0;
+    const newHeld = isBuy ? curHeld + qty : curHeld - qty;
+
+    tradeUpdates[stuPath + '/deposit'] = newDeposit;
+    tradeUpdates[stuPath + '/holdings/' + ticker] = newHeld;
+
+    // history (배열 push 방식 대신 새 배열로)
+    const newHist = [...(stu.history ?? [])];
+    newHist.push({ type: isBuy ? 'buy' : 'sell', ticker, qty, price, total, date: new Date().toLocaleString('ko-KR') });
     if (finalTax > 0) {
-      const teacherRef = ref(db, 'state/students/김민재 선생님');
-      await runTransaction(teacherRef, t => {
-        if (!t) return t;
-        t.deposit = Math.round(((t.deposit ?? 0) + finalTax) * 100) / 100;
-        if (!t.history) t.history = [];
-        t.history.push({
-          type: 'tax-income', ticker: '', qty: 0, price: 0, total: finalTax,
-          date: new Date().toLocaleString('ko-KR'), collectedFrom: 1,
-        });
-        return t;
-      });
+      newHist.push({ type: 'trade-tax', ticker, qty: 0, price: 0, total: finalTax, date: new Date().toLocaleString('ko-KR'), tradeType: isBuy ? 'buy' : 'sell' });
     }
+    tradeUpdates[stuPath + '/history'] = newHist;
+
+    // 거래세 → 선생님
+    if (finalTax > 0) {
+      const teacher = fbState.students?.['김민재 선생님'] ?? {};
+      tradeUpdates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + finalTax) * 100) / 100;
+      const tHist = [...(teacher.history ?? [])];
+      tHist.push({ type: 'tax-income', ticker: '', qty: 0, price: 0, total: finalTax, date: new Date().toLocaleString('ko-KR'), collectedFrom: 1 });
+      tradeUpdates['state/students/김민재 선생님/history'] = tHist;
+    }
+
+    await update(ref(db), tradeUpdates);
 
     // ── 수요/공급 압력 누적 ──────────────────────────
     if (!ticker.includes('_INV') && !ticker.includes('_LEV')) {
@@ -2910,7 +2910,16 @@ function renderPendingOrders(ticker) {
 }
 
 window.cancelLimitOrder = async function(orderId) {
-  await update(ref(db, 'state/limitOrders/' + currentUser), { [orderId]: null });
+  const order = fbState.limitOrders?.[currentUser]?.[orderId];
+  const cancelUpdates = { ['state/limitOrders/' + currentUser + '/' + orderId]: null };
+  // 매수 지정가 취소: 예약된 예금 환급
+  if (order?.side === 'buy' && (order.reserveAmt ?? 0) > 0) {
+    const stu = fbState.students?.[currentUser] ?? {};
+    cancelUpdates['state/students/' + currentUser + '/deposit'] =
+      Math.round(((stu.deposit ?? 0) + order.reserveAmt) * 100) / 100;
+  }
+  await update(ref(db), cancelUpdates);
+  showToast('주문이 취소됐습니다', 'success');
   renderCurrentTab();
 };
 
@@ -2921,11 +2930,17 @@ window.placeLimitOrder = async function placeLimitOrder() {
   if (lp <= 0)     return showToast('지정가를 입력해주세요', 'error');
   const stu        = fbState.students[currentUser];
   const isBuy      = activeTradeType === 'buy';
-  if (isBuy && lp * qty > stu.deposit) return showToast('예금이 부족합니다', 'error');
+  const reserveAmt = lp * qty;
+  if (isBuy && reserveAmt > stu.deposit) return showToast('예금이 부족합니다', 'error');
   if (!isBuy && (stu.holdings?.[selectedStock] ?? 0) < qty) return showToast('보유 수량이 부족합니다', 'error');
   const id = 'lo_' + Date.now();
-  const order = { id, ticker: selectedStock, side: activeTradeType, qty, limitPrice: lp, ts: Date.now() };
-  await update(ref(db, 'state/limitOrders/' + currentUser), { [id]: order });
+  const order = { id, ticker: selectedStock, side: activeTradeType, qty, limitPrice: lp, ts: Date.now(), reserveAmt: isBuy ? reserveAmt : 0 };
+  const orderUpdates = { ['state/limitOrders/' + currentUser + '/' + id]: order };
+  // 매수 지정가: 예금 미리 차감 (체결/취소 시 환급)
+  if (isBuy) {
+    orderUpdates['state/students/' + currentUser + '/deposit'] = Math.round((stu.deposit - reserveAmt) * 100) / 100;
+  }
+  await update(ref(db), orderUpdates);
   showToast((isBuy ? '매수' : '매도') + ' 지정가 주문이 등록됐어요! (' + fmtF(lp) + '점)', 'success');
   renderCurrentTab();
 }
@@ -2934,36 +2949,56 @@ window.placeLimitOrder = async function placeLimitOrder() {
 async function checkLimitOrders() {
   const allOrders = fbState.limitOrders ?? {};
   const updates = {};
+  // 유저별로 누적 처리 (같은 유저 주문 여러 개 동시 체결 대응)
+  const userState = {}; // userId → { deposit, holdings, history }
+
   for (const [userId, userOrders] of Object.entries(allOrders)) {
     if (!userOrders) continue;
     for (const [orderId, order] of Object.entries(userOrders)) {
       if (!order) continue;
       const curPrice = fbState.prices?.[order.ticker] ?? 0;
       const triggered = order.side === 'buy'
-        ? curPrice <= order.limitPrice   // 매수: 현재가가 지정가 이하로 내려오면
-        : curPrice >= order.limitPrice;  // 매도: 현재가가 지정가 이상으로 오르면
+        ? curPrice <= order.limitPrice
+        : curPrice >= order.limitPrice;
       if (!triggered) continue;
-      // 체결 처리
-      const stu = fbState.students?.[userId];
-      if (!stu) continue;
-      const total = order.qty * curPrice;
-      if (order.side === 'buy') {
-        if (stu.deposit < total) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
-        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit - total) * 100) / 100;
-        const newHeld = (stu.holdings?.[order.ticker] ?? 0) + order.qty;
-        updates['state/students/' + userId + '/holdings/' + order.ticker] = newHeld;
-      } else {
-        const held = stu.holdings?.[order.ticker] ?? 0;
-        if (held < order.qty) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
-        updates['state/students/' + userId + '/deposit'] = Math.round((stu.deposit + total) * 100) / 100;
-        updates['state/students/' + userId + '/holdings/' + order.ticker] = held - order.qty;
+
+      // 유저 상태 초기화 (첫 주문이면 fbState에서 읽음, 이후엔 누적값 사용)
+      if (!userState[userId]) {
+        const stu = fbState.students?.[userId];
+        if (!stu) continue;
+        userState[userId] = {
+          deposit: stu.deposit ?? 0,
+          holdings: { ...(stu.holdings ?? {}) },
+          history: [...(stu.history ?? [])],
+        };
       }
-      // 거래내역 추가
-      const hist = [...(stu.history ?? []), { type: order.side, ticker: order.ticker, qty: order.qty, price: curPrice, total, date: new Date().toLocaleString('ko-KR'), isLimit: true }];
-      updates['state/students/' + userId + '/history'] = hist;
+      const us = userState[userId];
+      const total = order.qty * curPrice;
+
+      if (order.side === 'buy') {
+        if (us.deposit < 0) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
+        // 매수: 예금이 이미 차감됐으므로, 지정가-현재가 차액만 환급
+        const refund = Math.round(((order.reserveAmt ?? order.limitPrice * order.qty) - total) * 100) / 100;
+        us.deposit = Math.round((us.deposit + refund) * 100) / 100;
+        us.holdings[order.ticker] = (us.holdings[order.ticker] ?? 0) + order.qty;
+      } else {
+        const held = us.holdings[order.ticker] ?? 0;
+        if (held < order.qty) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
+        us.deposit = Math.round((us.deposit + total) * 100) / 100;
+        us.holdings[order.ticker] = held - order.qty;
+      }
+      us.history.push({ type: order.side, ticker: order.ticker, qty: order.qty, price: curPrice, total, date: new Date().toLocaleString('ko-KR'), isLimit: true });
       updates['state/limitOrders/' + userId + '/' + orderId] = null;
     }
   }
+
+  // 누적된 유저별 상태를 한번에 씀
+  for (const [userId, us] of Object.entries(userState)) {
+    updates['state/students/' + userId + '/deposit'] = us.deposit;
+    updates['state/students/' + userId + '/holdings'] = us.holdings;
+    updates['state/students/' + userId + '/history'] = us.history;
+  }
+
   if (Object.keys(updates).length > 0) await update(ref(db), updates);
 }
 
@@ -3127,15 +3162,14 @@ async function executeTrade() {
   if (tradeTax.enabled && currentUser !== '김민재 선생님') {
     const dep = stu.deposit ?? 0;
     const sv = calcStockVal(currentUser);
-    const totalAsset = dep + sv;
+    const sl = calcShortLiability(currentUser);
+    const totalAsset = dep + sv - sl;
     const threshold = tradeTax.threshold ?? 1000000000;
     if (totalAsset >= threshold) {
       const basis = tradeTax.basis ?? 'totalAsset';
       const rate = (tradeTax.rate ?? 3) / 100;
       const iv = initVal(stu.group);
-      let taxBase = 0;
-      if (basis === 'profit') taxBase = Math.max(0, totalAsset - iv);
-      else taxBase = totalAsset;
+      const taxBase = basis === 'profit' ? Math.max(0, totalAsset - iv) : totalAsset;
       taxAmount = Math.round(taxBase * rate);
     }
   }
@@ -3157,56 +3191,37 @@ async function executeTrade() {
   if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
 
   try {
-    const stuRef  = ref(db, `state/students/${currentUser}`);
-    const finalTax = taxAmount; // capture for closure
-    await runTransaction(stuRef, current => {
-      if (!current) return current;
-      if (isBuy) {
-        current.deposit = Math.round((current.deposit - total - finalTax) * 100) / 100;
-        current.holdings = current.holdings ?? {};
-        current.holdings[selectedStock] = (current.holdings[selectedStock] ?? 0) + qty;
-      } else {
-        const held = current.holdings?.[selectedStock] ?? 0;
-        if (held < qty) return; // abort
-        current.deposit = Math.round((current.deposit + total - finalTax) * 100) / 100;
-        current.holdings[selectedStock] = held - qty;
-      }
-      if (!current.history) current.history = [];
-      current.history.push({
-        type: isBuy ? 'buy' : 'sell',
-        ticker: selectedStock,
-        qty, price, total,
-        date: new Date().toLocaleString('ko-KR')
-      });
-      if (finalTax > 0) {
-        current.history.push({
-          type: 'trade-tax',
-          ticker: selectedStock,
-          qty: 0, price: 0,
-          total: finalTax,
-          date: new Date().toLocaleString('ko-KR'),
-          tradeType: isBuy ? 'buy' : 'sell',
-        });
-      }
-      return current;
-    });
+    const finalTax = taxAmount;
+    const stuPath = 'state/students/' + currentUser;
+    const tradeUpdates = {};
 
-    // ── 세금 → 선생님 계좌로 이전 ────────
+    // 예금/보유량 계산
+    const newDeposit = isBuy
+      ? Math.round((stu.deposit - total - finalTax) * 100) / 100
+      : Math.round((stu.deposit + total - finalTax) * 100) / 100;
+    const curHeld = stu.holdings?.[selectedStock] ?? 0;
+    const newHeld = isBuy ? curHeld + qty : curHeld - qty;
+
+    tradeUpdates[stuPath + '/deposit'] = newDeposit;
+    tradeUpdates[stuPath + '/holdings/' + selectedStock] = newHeld;
+
+    const newHist = [...(stu.history ?? [])];
+    newHist.push({ type: isBuy ? 'buy' : 'sell', ticker: selectedStock, qty, price, total, date: new Date().toLocaleString('ko-KR') });
     if (finalTax > 0) {
-      const teacherRef = ref(db, 'state/students/김민재 선생님');
-      await runTransaction(teacherRef, t => {
-        if (!t) return t;
-        t.deposit = Math.round(((t.deposit ?? 0) + finalTax) * 100) / 100;
-        if (!t.history) t.history = [];
-        t.history.push({
-          type: 'tax-income', ticker: '', qty: 0, price: 0,
-          total: finalTax,
-          date: new Date().toLocaleString('ko-KR'),
-          collectedFrom: 1,
-        });
-        return t;
-      });
+      newHist.push({ type: 'trade-tax', ticker: selectedStock, qty: 0, price: 0, total: finalTax, date: new Date().toLocaleString('ko-KR'), tradeType: isBuy ? 'buy' : 'sell' });
     }
+    tradeUpdates[stuPath + '/history'] = newHist;
+
+    // 거래세 → 선생님
+    if (finalTax > 0) {
+      const teacher = fbState.students?.['김민재 선생님'] ?? {};
+      tradeUpdates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + finalTax) * 100) / 100;
+      const tHist = [...(teacher.history ?? [])];
+      tHist.push({ type: 'tax-income', ticker: '', qty: 0, price: 0, total: finalTax, date: new Date().toLocaleString('ko-KR'), collectedFrom: 1 });
+      tradeUpdates['state/students/김민재 선생님/history'] = tHist;
+    }
+
+    await update(ref(db), tradeUpdates);
 
     // ── 매수/매도 압력 누적 (단순 거래량 기반) ────────
     if (!selectedStock.includes('_INV') && !selectedStock.includes('_LEV')) {
