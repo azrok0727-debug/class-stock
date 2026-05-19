@@ -1729,7 +1729,7 @@ function calcShortLiability(sname) {
 }
 function calcTotal(sname) {
   const stu = fbState?.students?.[sname];
-  return (stu?.deposit ?? 0) + calcStockVal(sname) - calcShortLiability(sname);
+  return (stu?.deposit ?? 0) + calcStockVal(sname);
 }
 function initVal(gid) {
   if (!gid) return 1000; // 선생님 계정(group 0)
@@ -2589,8 +2589,7 @@ window.executeModalTrade = async function executeModalTrade(ticker) {
   if (tradeTax.enabled && currentUser !== '김민재 선생님') {
     const dep = stu.deposit ?? 0;
     const sv = calcStockVal(currentUser);
-    const sl = calcShortLiability(currentUser);
-    const totalAsset = dep + sv - sl;
+    const totalAsset = dep + sv;
     const threshold = tradeTax.threshold ?? 1000000000;
     if (totalAsset >= threshold) {
       const basis = tradeTax.basis ?? 'totalAsset';
@@ -3162,8 +3161,7 @@ async function executeTrade() {
   if (tradeTax.enabled && currentUser !== '김민재 선생님') {
     const dep = stu.deposit ?? 0;
     const sv = calcStockVal(currentUser);
-    const sl = calcShortLiability(currentUser);
-    const totalAsset = dep + sv - sl;
+    const totalAsset = dep + sv;
     const threshold = tradeTax.threshold ?? 1000000000;
     if (totalAsset >= threshold) {
       const basis = tradeTax.basis ?? 'totalAsset';

@@ -168,9 +168,6 @@ function calcTotal(sname) {
   if (!s) return 0;
   let v = s.deposit ?? 0;
   Object.entries(s.holdings ?? {}).forEach(([t,q]) => v += q * (fbState.prices?.[t] ?? 0));
-  // 공매도 부채 차감
-  const pos = fbState?.shortPositions?.[sname] ?? {};
-  Object.entries(pos).forEach(([t,p]) => { if (p?.qty > 0) v -= p.qty * (fbState.prices?.[t] ?? 0); });
   return v;
 }
 function calcStockVal(sname) {
