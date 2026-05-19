@@ -1522,8 +1522,14 @@ async function cleanupInv100() {
 
 function startPriceTick() {
   if (tickTimer) return;
+  // 선생님만 틱 실행 가능
+  if (currentUser !== TEACHER_ACCOUNT.name) return;
   tickTimer = setInterval(async () => {
     if (!fbState || !fbState.marketOpen) return;
+    // ── 중복 틱 방지: 마지막 틱이 8초 이내면 건너뜀 ──
+    const lastTick = fbState.lastTickTs ?? 0;
+    const now = Date.now();
+    if (now - lastTick < 8000) return;
     const updates = {};
     const newPrev = { ...fbState.prices };
     // ── 상한가/하한가 기준가: 1시간 전 가격 (hourlyBase) ──
@@ -1618,7 +1624,6 @@ function startPriceTick() {
       });
     });
     // ── 하루 시작 시 dailyClose/openPrice 업데이트 ─────
-    const now = Date.now();
     const todayStr = new Date(now).toLocaleDateString('ko-KR');
     const savedDate = fbState.dailyCloseDate;
     if (savedDate !== todayStr) {
@@ -1675,6 +1680,7 @@ function startPriceTick() {
     // 지정가 체결 체크
     await checkLimitOrders();
     await checkShortForceClose();
+    updates['state/lastTickTs'] = now;
     await update(ref(db), updates);
   }, 10000);
 }
