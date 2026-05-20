@@ -2230,7 +2230,14 @@ async function doReset(type) {
       updates[`state/groups/${g.id}`]         = { totalScore: 1000 };
       updates[`state/shareSupply/G${g.id}`]   = 60;
     });
-    updates['state/marketOpen'] = false;
+    // 공매도/지정가/압력/타임스탬프 완전 초기화
+    updates['state/shortPositions']  = null;
+    updates['state/limitOrders']     = null;
+    updates['state/buyPressure']     = null;
+    updates['state/sellPressure']    = null;
+    updates['state/tickPressure']    = null;
+    updates['state/lastTickTs']      = null;
+    updates['state/marketOpen']      = false;
   }
 
   await update(ref(db), updates);
