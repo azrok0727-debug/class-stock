@@ -203,7 +203,7 @@ function subscribeState() {
       const isInput = document.activeElement?.tagName === 'INPUT' ||
                       document.activeElement?.tagName === 'TEXTAREA' ||
                       document.activeElement?.tagName === 'SELECT';
-      const skipRender = (activeTab === 'notice' || activeTab === 'news' || activeTab === 'salary' || activeTab === 'tax' || activeTab === 'students') && isInput;
+      const skipRender = (activeTab === 'notice' || activeTab === 'news' || activeTab === 'salary' || activeTab === 'tax') && isInput;
       if (!skipRender) renderTab();
     }
   }, err => showToast('Firebase 연결 실패: ' + err.message, 'error'));
@@ -950,9 +950,15 @@ window.payAllSalaries = async function() {
     updates['state/students/' + s.name + '/deposit'] = (stu.deposit ?? 0) + pay;
     const hist = [...(stu.history ?? []), {
       type: 'salary', ticker: '', qty: 0, price: 0, total: pay,
-      date: new Date().toLocaleString('ko-KR'), role: role || '기본',
+      date: new Date().toLocaleString('ko-KR'), role: role || '기본', ts: Date.now(),
     }];
     updates['state/students/' + s.name + '/history'] = hist;
+    // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+    const bankHist = [...(fbState?.bankHistory?.[s.name] ?? []), {
+      type: 'salary', ticker: '', qty: 0, price: 0, total: pay,
+      date: new Date().toLocaleString('ko-KR'), role: role || '기본', ts: Date.now(),
+    }];
+    updates['state/bankHistory/' + s.name] = bankHist;
     actualPaid += pay;
     count++;
   });
@@ -962,9 +968,15 @@ window.payAllSalaries = async function() {
     Math.round((teacherDeposit - actualPaid) * 100) / 100;
   const tHist = [...(teacher.history ?? []), {
     type: 'salary-out', ticker: '', qty: 0, price: 0, total: actualPaid,
-    date: new Date().toLocaleString('ko-KR'), paidTo: count,
+    date: new Date().toLocaleString('ko-KR'), paidTo: count, ts: Date.now(),
   }];
   updates['state/students/김민재 선생님/history'] = tHist;
+  // 선생님 bankHistory에도 추가
+  const tBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? []), {
+    type: 'salary-out', ticker: '', qty: 0, price: 0, total: actualPaid,
+    date: new Date().toLocaleString('ko-KR'), paidTo: count, ts: Date.now(),
+  }];
+  updates['state/bankHistory/김민재 선생님'] = tBankHist;
   updates['state/salaryConfig/lastPayDate'] = new Date().toLocaleString('ko-KR');
 
   await update(ref(db), updates);
@@ -1145,17 +1157,30 @@ window.collectCustomTaxPct = async function(name) {
   updates['state/students/' + name + '/deposit'] = Math.round((dep - amount) * 100) / 100;
   const hist = [...(stu.history ?? []), {
     type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
-    date: new Date().toLocaleString('ko-KR'), custom: true, taxPct: pct,
+    date: new Date().toLocaleString('ko-KR'), custom: true, taxPct: pct, ts: Date.now(),
   }];
   updates['state/students/' + name + '/history'] = hist;
+  // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+  const bankHist = [...(fbState?.bankHistory?.[name] ?? []), {
+    type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), custom: true, taxPct: pct, ts: Date.now(),
+  }];
+  updates['state/bankHistory/' + name] = bankHist;
+  
   // 선생님 예금으로 이전
   const teacher = fbState.students?.['김민재 선생님'] ?? {};
   updates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + amount) * 100) / 100;
   const tHist = [...(teacher.history ?? []), {
     type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
-    date: new Date().toLocaleString('ko-KR'), from: name, taxPct: pct,
+    date: new Date().toLocaleString('ko-KR'), from: name, taxPct: pct, ts: Date.now(),
   }];
   updates['state/students/김민재 선생님/history'] = tHist;
+  // 선생님 bankHistory에도 추가
+  const teacherBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? []), {
+    type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), from: name, taxPct: pct, ts: Date.now(),
+  }];
+  updates['state/bankHistory/김민재 선생님'] = teacherBankHist;
 
   await update(ref(db), updates);
   showToast(name + ' 총자산의 ' + pct + '% → ' + fmt(amount) + '점 징수 완료! 💸', 'success');
@@ -1176,18 +1201,30 @@ window.collectCustomTax = async function(name) {
   updates['state/students/' + name + '/deposit'] = Math.round((dep - amount) * 100) / 100;
   const hist = [...(stu.history ?? []), {
     type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
-    date: new Date().toLocaleString('ko-KR'), custom: true,
+    date: new Date().toLocaleString('ko-KR'), custom: true, ts: Date.now(),
   }];
   updates['state/students/' + name + '/history'] = hist;
+  // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+  const bankHist = [...(fbState?.bankHistory?.[name] ?? []), {
+    type: 'tax', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), custom: true, ts: Date.now(),
+  }];
+  updates['state/bankHistory/' + name] = bankHist;
 
   // 선생님 예금으로 이전
   const teacher = fbState.students?.['김민재 선생님'] ?? {};
   updates['state/students/김민재 선생님/deposit'] = Math.round(((teacher.deposit ?? 0) + amount) * 100) / 100;
   const tHist = [...(teacher.history ?? []), {
     type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
-    date: new Date().toLocaleString('ko-KR'), from: name,
+    date: new Date().toLocaleString('ko-KR'), from: name, ts: Date.now(),
   }];
   updates['state/students/김민재 선생님/history'] = tHist;
+  // 선생님 bankHistory에도 추가
+  const teacherBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? []), {
+    type: 'tax-income', ticker: '', qty: 0, price: 0, total: amount,
+    date: new Date().toLocaleString('ko-KR'), from: name, ts: Date.now(),
+  }];
+  updates['state/bankHistory/김민재 선생님'] = teacherBankHist;
 
   await update(ref(db), updates);
   showToast(name + '에게서 ' + fmt(amount) + '점 세금 징수! → 김민재 선생님 예금으로 이전', 'success');
@@ -1641,9 +1678,19 @@ async function _collectOneTax(ct, label) {
     newHist.push({
       type: 'tax', ticker: '', qty: 0, price: 0, total: actual,
       date: new Date().toLocaleString('ko-KR'),
-      taxRate: ct.rate + '%', taxName: label, totalAsset: tot,
+      taxRate: ct.rate + '%', taxName: label, totalAsset: tot, ts: Date.now(),
     });
     updates['state/students/' + name + '/history'] = newHist;
+    
+    // bankHistory에도 추가 (가나디뱅크에 표시되도록)
+    const newBankHist = [...(fbState?.bankHistory?.[name] ?? [])];
+    newBankHist.push({
+      type: 'tax', ticker: '', qty: 0, price: 0, total: actual,
+      date: new Date().toLocaleString('ko-KR'),
+      taxRate: ct.rate + '%', taxName: label, totalAsset: tot, ts: Date.now(),
+    });
+    updates['state/bankHistory/' + name] = newBankHist;
+    
     totalCollected += actual;
     collectedFrom++;
   }
@@ -1656,9 +1703,17 @@ async function _collectOneTax(ct, label) {
     const tHist = [...(teacher.history ?? [])];
     tHist.push({
       type: 'tax-income', ticker: '', qty: 0, price: 0, total: totalCollected,
-      date: new Date().toLocaleString('ko-KR'), collectedFrom, taxName: label,
+      date: new Date().toLocaleString('ko-KR'), collectedFrom, taxName: label, ts: Date.now(),
     });
     updates['state/students/김민재 선생님/history'] = tHist;
+    
+    // 선생님 bankHistory에도 추가
+    const tBankHist = [...(fbState?.bankHistory?.['김민재 선생님'] ?? [])];
+    tBankHist.push({
+      type: 'tax-income', ticker: '', qty: 0, price: 0, total: totalCollected,
+      date: new Date().toLocaleString('ko-KR'), collectedFrom, taxName: label, ts: Date.now(),
+    });
+    updates['state/bankHistory/김민재 선생님'] = tBankHist;
   }
 
   return { updates, totalCollected, collectedFrom };
@@ -2204,7 +2259,13 @@ async function doReset(type) {
     });
   }
   if (type === 'history' || type === 'all') {
-    ALL_STUDENTS.forEach(s => { updates[`state/students/${s.name}/history`] = []; });
+    ALL_STUDENTS.forEach(s => { 
+      updates[`state/students/${s.name}/history`] = []; 
+      updates[`state/bankHistory/${s.name}`] = []; // bankHistory도 초기화
+    });
+    // 선생님 거래내역도 초기화
+    updates[`state/students/김민재 선생님/history`] = [];
+    updates[`state/bankHistory/김민재 선생님`] = [];
   }
   // ── 차트 데이터 초기화 ──────────────────────────────
   if (type === 'candles' || type === 'chartall' || type === 'all') {
@@ -2230,14 +2291,7 @@ async function doReset(type) {
       updates[`state/groups/${g.id}`]         = { totalScore: 1000 };
       updates[`state/shareSupply/G${g.id}`]   = 60;
     });
-    // 공매도/지정가/압력/타임스탬프 완전 초기화
-    updates['state/shortPositions']  = null;
-    updates['state/limitOrders']     = null;
-    updates['state/buyPressure']     = null;
-    updates['state/sellPressure']    = null;
-    updates['state/tickPressure']    = null;
-    updates['state/lastTickTs']      = null;
-    updates['state/marketOpen']      = false;
+    updates['state/marketOpen'] = false;
   }
 
   await update(ref(db), updates);
