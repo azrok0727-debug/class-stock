@@ -2948,13 +2948,14 @@ window.placeLimitOrder = async function placeLimitOrder() {
 async function checkLimitOrders() {
   const allOrders = fbState.limitOrders ?? {};
   const updates = {};
-  // 유저별로 누적 처리 (같은 유저 주문 여러 개 동시 체결 대응)
-  const userState = {}; // userId → { deposit, holdings, history }
+  const userState = {};
+  const processedOrders = new Set(); // 이번 틱에 처리된 주문 중복 방지
 
   for (const [userId, userOrders] of Object.entries(allOrders)) {
     if (!userOrders) continue;
     for (const [orderId, order] of Object.entries(userOrders)) {
-      if (!order) continue;
+      if (!order || processedOrders.has(userId + '/' + orderId)) continue;
+      processedOrders.add(userId + '/' + orderId);
       const curPrice = fbState.prices?.[order.ticker] ?? 0;
       const triggered = order.side === 'buy'
         ? curPrice <= order.limitPrice
@@ -2976,9 +2977,16 @@ async function checkLimitOrders() {
 
       if (order.side === 'buy') {
         if (us.deposit < 0) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
-        // 매수: 예금이 이미 차감됐으므로, 지정가-현재가 차액만 환급
-        const refund = Math.round(((order.reserveAmt ?? order.limitPrice * order.qty) - total) * 100) / 100;
-        us.deposit = Math.round((us.deposit + refund) * 100) / 100;
+        // reserveAmt가 있는 경우(새 방식): 차액만 환급
+        // reserveAmt가 없는 경우(구 방식): 예금에서 현재가 * 수량 차감
+        if (order.reserveAmt > 0) {
+          const refund = Math.round(((order.reserveAmt) - total) * 100) / 100;
+          us.deposit = Math.round((us.deposit + refund) * 100) / 100;
+        } else {
+          // 구 방식: 예금에서 직접 차감
+          if (us.deposit < total) { updates['state/limitOrders/' + userId + '/' + orderId] = null; continue; }
+          us.deposit = Math.round((us.deposit - total) * 100) / 100;
+        }
         us.holdings[order.ticker] = (us.holdings[order.ticker] ?? 0) + order.qty;
       } else {
         const held = us.holdings[order.ticker] ?? 0;
