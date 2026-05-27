@@ -1329,8 +1329,8 @@ function subscribeState() {
     }
     updateStatusUI();
     updateNoticeBar();
-    // INV100 폐지 정리 (한 번만)
-    if (!window._inv100Cleaned && fbState.prices) { window._inv100Cleaned = true; cleanupInv100(); }
+    // INV100 폐지 정리 (Firebase 플래그로 한 번만)
+    if (!fbState.inv100Cleaned && fbState.prices) { cleanupInv100(); }
     if (currentUser) {
       // ── 입력 중이면 전체 재렌더 건너뜀 ──────────────
       const focused = document.activeElement;
@@ -1497,25 +1497,24 @@ window.executeShortCover = async function(ticker) {
 
 // INV100 상품 폐지 - Firebase 데이터 정리
 async function cleanupInv100() {
+  // 이미 정리됐으면 건너뜀
+  if (fbState.inv100Cleaned) return;
   const updates = {};
   let hasData = false;
   GROUPS.forEach(g => {
     const tk = 'G' + g.id + '_INV100';
-    // 보유 학생 강제매도 + 예금 환급
     const price = fbState.prices?.[tk];
     if (price !== undefined) {
       hasData = true;
-      // 학생 보유량 처리
       Object.keys(fbState.students ?? {}).forEach(name => {
         const qty = fbState.students[name]?.holdings?.[tk] ?? 0;
         if (qty > 0) {
-          const refund = Math.min(qty * Math.min(price, 99999), 999999); // 최대 환급액 제한
+          const refund = Math.min(qty * Math.min(price, 99999), 999999);
           updates['state/students/'+name+'/deposit'] =
             Math.round(((fbState.students[name].deposit ?? 0) + refund) * 100) / 100;
           updates['state/students/'+name+'/holdings/'+tk] = null;
         }
       });
-      // Firebase 가격 데이터 삭제
       updates['state/prices/'+tk]      = null;
       updates['state/prevPrices/'+tk]  = null;
       updates['state/dailyClose/'+tk]  = null;
@@ -1526,6 +1525,7 @@ async function cleanupInv100() {
     }
   });
   if (hasData) {
+    updates['state/inv100Cleaned'] = true; // Firebase에 플래그 저장 → 재실행 방지
     await update(ref(db), updates);
     console.log('INV100 정리 완료');
   }
@@ -1572,14 +1572,17 @@ function startPriceTick() {
       const lowerLimit = Math.max(1, Math.round(hourBase * 0.5 * 10) / 10); // -50%
 
       // ── 매수/매도 압력 기반 가격 결정 ──────────────
+      const priceLogic = fbState.priceLogic ?? 'normal';
+      const isReverse = priceLogic === 'reverse';
       const buyP  = fbState.buyPressure?.[key]  ?? 0;
       const sellP = fbState.sellPressure?.[key] ?? 0;
+      // 반대 로직: 매수압력 → 하락, 매도압력 → 상승
+      const effectiveBuyP  = isReverse ? sellP : buyP;
+      const effectiveSellP = isReverse ? buyP  : sellP;
       let newBase;
-      if (buyP > 0 || sellP > 0) {
-        // 불균형 지수: -1(완전매도) ~ +1(완전매수)
-        const totalP = buyP + sellP;
-        const imb = totalP > 0 ? (buyP - sellP) / totalP : 0;
-        // 틱당 최대 ±5% 이동 (압력 반영)
+      if (effectiveBuyP > 0 || effectiveSellP > 0) {
+        const totalP = effectiveBuyP + effectiveSellP;
+        const imb = totalP > 0 ? (effectiveBuyP - effectiveSellP) / totalP : 0;
         const move = imb * 0.05;
         newBase = Math.round(cur * (1 + move) * 10) / 10;
       } else {
@@ -1607,8 +1610,11 @@ function startPriceTick() {
 
       // basePct 클램핑: 틱당 ±5% 이내
       const safePct = Math.max(-0.05, Math.min(0.05, basePct));
-      let newInv = Math.round(curInv * (1 - safePct) * 10) / 10;
-      let newLev = Math.round(curLev * (1 + safePct * 2) * 10) / 10;
+      // 반대 로직에서는 INV/LEV 방향도 반전 (INV는 기본 로직과 반대이므로 반전하면 기본과 같아짐)
+      const invPct = isReverse ? safePct : -safePct;
+      const levPct = isReverse ? -safePct * 2 : safePct * 2;
+      let newInv = Math.round(curInv * (1 + invPct) * 10) / 10;
+      let newLev = Math.round(curLev * (1 + levPct) * 10) / 10;
 
       // 상한가/하한가 + NaN 방어
       newInv = Math.max(Math.max(1, Math.round(hourBaseInv * 0.5 * 10) / 10),
